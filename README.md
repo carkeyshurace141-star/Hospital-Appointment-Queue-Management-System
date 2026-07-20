@@ -91,7 +91,7 @@ Patient Portal  →  Backend API / Database  →  Scheduling Engine  →  Clinic
 | Member | Module | Responsibility |
 |---|---|---|
 | **Suman Pokhrel** | Patient Portal and Booking | Registration, booking, walk-in, category capture, live queue display, feedback |
-| **Nirmal Khanal** | Scheduling Engine and Benchmark | FCFS, Priority, Round Robin, Multi-Level Queue, benchmark harness |
+| **Nirmal Kharal** | Scheduling Engine and Benchmark | FCFS, Priority, Round Robin, Multi-Level Queue, benchmark harness |
 | **Suresh Karki** | Backend, Security and Admin | Database, REST API, authentication, RBAC, smart allocation, reporting, compliance |
 | **Kabindra Upadhayay** | Clinician Dashboard and Real-Time | Clinician actions, WebSocket layer, waiting room display, notifications |
 
