@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  @apply scroll-smooth;
+}
+
+body {
+  @apply bg-stone-50 text-stone-900 antialiased transition-colors duration-200 dark:bg-stone-950 dark:text-stone-100;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  @apply outline outline-2 outline-offset-2 outline-teal-600 dark:outline-teal-400;
+}
+
+::selection {
+  @apply bg-teal-200 text-teal-950;
+}
