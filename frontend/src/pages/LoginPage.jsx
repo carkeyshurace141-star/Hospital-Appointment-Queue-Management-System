@@ -5,6 +5,7 @@ import GoogleButton from '../components/GoogleButton.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { login as loginRequest, googleLogin } from '../services/authService';
 import { validateEmail } from '../utils/validators';
+import { homeRouteForRole } from '../utils/roles';
 
 const INITIAL_VALUES = { email: '', password: '' };
 
@@ -46,7 +47,7 @@ function LoginPage() {
     try {
       const data = await loginRequest(values);
       login(data.token, data.user);
-      navigate('/dashboard');
+      navigate(homeRouteForRole(data.user.role));
     } catch (_err) {
       // Never reveal whether the email exists — always a generic message.
       setServerError('Incorrect email or password.');
@@ -61,7 +62,7 @@ function LoginPage() {
       try {
         const data = await googleLogin(credential);
         login(data.token, data.user);
-        navigate('/dashboard');
+        navigate(homeRouteForRole(data.user.role));
       } catch (err) {
         setServerError(err.message);
       }

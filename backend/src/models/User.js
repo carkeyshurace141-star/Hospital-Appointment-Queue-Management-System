@@ -41,6 +41,25 @@ const userSchema = new mongoose.Schema(
       enum: ['patient', 'doctor', 'admin'],
       default: 'patient',
     },
+    mustChangePassword: {
+      type: Boolean,
+      default: false,
+    },
+    specialization: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    department: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );

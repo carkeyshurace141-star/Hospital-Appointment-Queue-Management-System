@@ -37,6 +37,10 @@ function AuthProvider({ children }) {
     setUser(null);
   }
 
+  function updateUser(newUser) {
+    setUser(newUser);
+  }
+
   const value = useMemo(
     () => ({
       token,
@@ -45,6 +49,7 @@ function AuthProvider({ children }) {
       isLoading,
       login,
       logout,
+      updateUser,
     }),
     [token, user, isLoading],
   );

@@ -25,4 +25,12 @@ function fetchMe(token) {
   return request('/api/auth/me', { token });
 }
 
-export { signup, login, googleLogin, fetchMe };
+function changePassword({ currentPassword, newPassword }, token) {
+  return request('/api/auth/change-password', {
+    method: 'PATCH',
+    body: { currentPassword, newPassword },
+    token,
+  });
+}
+
+export { signup, login, googleLogin, fetchMe, changePassword };

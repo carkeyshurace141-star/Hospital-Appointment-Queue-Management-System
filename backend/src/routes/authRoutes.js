@@ -1,9 +1,11 @@
 const express = require('express');
 const { body } = require('express-validator');
 const rateLimit = require('express-rate-limit');
-const { signup, login, googleAuth, me } = require('../controllers/authController');
+const { signup, login, googleAuth, me, changePassword } = require('../controllers/authController');
 const validate = require('../middleware/validate');
-const requireAuth = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
+const { validatePasswordStrength } = require('../utils/passwordPolicy');
+const { validatePhoneNumber } = require('../utils/phone');
 
 const router = express.Router();
 
@@ -16,19 +18,17 @@ const loginLimiter = rateLimit({
 });
 
 const signupValidation = [
-  body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters.'),
+  body('name').trim().isLength({ min: 2, max: 100 }).withMessage('Name must be at least 2 characters.'),
   body('email').trim().isEmail().withMessage('Please provide a valid email address.'),
   body('phone')
     .trim()
-    .matches(/^\+?[0-9\s\-().]{7,20}$/)
+    .custom((value) => validatePhoneNumber(value))
     .withMessage('Please provide a valid phone number.'),
-  body('password')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters.')
-    .matches(/[A-Za-z]/)
-    .withMessage('Password must contain at least one letter.')
-    .matches(/[0-9]/)
-    .withMessage('Password must contain at least one number.'),
+  body('password').custom((value) => {
+    const error = validatePasswordStrength(value);
+    if (error) throw new Error(error);
+    return true;
+  }),
 ];
 
 const loginValidation = [
@@ -38,9 +38,19 @@ const loginValidation = [
 
 const googleValidation = [body('credential').notEmpty().withMessage('Missing Google credential.')];
 
+const changePasswordValidation = [
+  body('currentPassword').notEmpty().withMessage('Current password is required.'),
+  body('newPassword').custom((value) => {
+    const error = validatePasswordStrength(value);
+    if (error) throw new Error(error);
+    return true;
+  }),
+];
+
 router.post('/signup', signupValidation, validate, signup);
 router.post('/login', loginLimiter, loginValidation, validate, login);
 router.post('/google', loginLimiter, googleValidation, validate, googleAuth);
 router.get('/me', requireAuth, me);
+router.patch('/change-password', requireAuth, changePasswordValidation, validate, changePassword);
 
 module.exports = router;

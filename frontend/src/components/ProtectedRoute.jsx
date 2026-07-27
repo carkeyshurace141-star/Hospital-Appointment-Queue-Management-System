@@ -1,8 +1,10 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { homeRouteForRole } from '../utils/roles';
 
-function ProtectedRoute({ children }) {
-  const { isAuthenticated, isLoading } = useAuth();
+function ProtectedRoute({ children, roles }) {
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -18,6 +20,14 @@ function ProtectedRoute({ children }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (user?.mustChangePassword && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />;
+  }
+
+  if (roles && !roles.includes(user?.role)) {
+    return <Navigate to={homeRouteForRole(user?.role)} replace />;
   }
 
   return children;

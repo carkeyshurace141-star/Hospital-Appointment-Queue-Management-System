@@ -5,6 +5,7 @@ import GoogleButton from '../components/GoogleButton.jsx';
 import PasswordStrengthMeter from '../components/PasswordStrengthMeter.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { signup, googleLogin } from '../services/authService';
+import { homeRouteForRole } from '../utils/roles';
 import {
   validateName,
   validateEmail,
@@ -56,7 +57,7 @@ function SignupPage() {
     try {
       const data = await signup(values);
       login(data.token, data.user);
-      navigate('/dashboard');
+      navigate(homeRouteForRole(data.user.role));
     } catch (err) {
       setServerError(err.message);
     } finally {
@@ -70,7 +71,7 @@ function SignupPage() {
       try {
         const data = await googleLogin(credential);
         login(data.token, data.user);
-        navigate('/dashboard');
+        navigate(homeRouteForRole(data.user.role));
       } catch (err) {
         setServerError(err.message);
       }

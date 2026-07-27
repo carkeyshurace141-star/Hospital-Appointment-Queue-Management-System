@@ -1,10 +1,10 @@
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const { asyncHandler } = require('../middleware/errorHandler');
+const { hashPassword, comparePassword } = require('../utils/password');
+const { validatePasswordStrength } = require('../utils/passwordPolicy');
 
-const SALT_ROUNDS = 12;
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 function signToken(user) {
@@ -20,6 +20,9 @@ function toPublicUser(user) {
     email: user.email,
     phone: user.phone,
     role: user.role,
+    specialization: user.specialization,
+    department: user.department,
+    mustChangePassword: user.mustChangePassword,
   };
 }
 
@@ -31,7 +34,7 @@ const signup = asyncHandler(async (req, res) => {
     return res.status(409).json({ message: 'Email is already registered.' });
   }
 
-  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const passwordHash = await hashPassword(password);
   const user = await User.create({ name, email, phone, passwordHash, provider: 'local' });
 
   const token = signToken(user);
@@ -46,7 +49,7 @@ const login = asyncHandler(async (req, res) => {
     return res.status(401).json({ message: 'Incorrect email or password.' });
   }
 
-  const isMatch = await bcrypt.compare(password, user.passwordHash);
+  const isMatch = await comparePassword(password, user.passwordHash);
   if (!isMatch) {
     return res.status(401).json({ message: 'Incorrect email or password.' });
   }
@@ -100,4 +103,24 @@ const me = asyncHandler(async (req, res) => {
   res.status(200).json({ user: toPublicUser(req.user) });
 });
 
-module.exports = { signup, login, googleAuth, me };
+const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const user = await User.findById(req.user._id);
+
+  if (!user.passwordHash || !(await comparePassword(currentPassword, user.passwordHash))) {
+    return res.status(401).json({ message: 'Current password is incorrect.' });
+  }
+
+  const strengthError = validatePasswordStrength(newPassword);
+  if (strengthError) {
+    return res.status(400).json({ message: strengthError });
+  }
+
+  user.passwordHash = await hashPassword(newPassword);
+  user.mustChangePassword = false;
+  await user.save();
+
+  res.status(200).json({ user: toPublicUser(user) });
+});
+
+module.exports = { signup, login, googleAuth, me, changePassword };

@@ -2,6 +2,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import LogoMark from './LogoMark.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
+import { homeRouteForRole } from '../utils/roles';
+
+const NAV_LABEL_BY_ROLE = {
+  admin: 'Admin',
+  doctor: 'Doctor Dashboard',
+  patient: 'Dashboard',
+};
 
 function Navbar() {
   const { isAuthenticated, user, logout } = useAuth();
@@ -29,6 +36,12 @@ function Navbar() {
         <div className="flex items-center gap-3 sm:gap-4">
           {isAuthenticated ? (
             <>
+              <Link
+                to={homeRouteForRole(user?.role)}
+                className="text-sm font-medium text-stone-700 hover:text-teal-700 dark:text-stone-300 dark:hover:text-teal-400"
+              >
+                {NAV_LABEL_BY_ROLE[user?.role] || 'Dashboard'}
+              </Link>
               <span className="hidden text-sm text-stone-600 dark:text-stone-400 sm:inline">
                 Hi, {user?.name}
               </span>
