@@ -46,6 +46,7 @@ function Icon({ children, className = 'h-5 w-5' }) {
       stroke="currentColor"
       strokeWidth="1.75"
       className={className}
+      aria-hidden="true"
     >
       {children}
     </svg>
