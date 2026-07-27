@@ -23,6 +23,10 @@ class FCFSQueue {
   size() {
     return this.items.length;
   }
+
+  isEmpty() {
+    return this.items.length === 0;
+  }
 }
 
 module.exports = FCFSQueue;

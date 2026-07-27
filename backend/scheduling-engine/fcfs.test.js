@@ -37,4 +37,15 @@ describe('FCFSQueue', () => {
     expect(() => queue.dequeue()).not.toThrow();
     expect(queue.dequeue()).toBeNull();
   });
+
+  test('isEmpty reflects queue state', () => {
+    const queue = new FCFSQueue();
+    expect(queue.isEmpty()).toBe(true);
+
+    queue.enqueue({ id: 'p1' });
+    expect(queue.isEmpty()).toBe(false);
+
+    queue.dequeue();
+    expect(queue.isEmpty()).toBe(true);
+  });
 });
