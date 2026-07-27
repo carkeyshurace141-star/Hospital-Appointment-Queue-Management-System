@@ -11,10 +11,10 @@ function initSocket(httpServer, corsOrigin) {
   });
 
   io.on('connection', (socket) => {
-    console.log(`[socket] client connected: ${socket.id}`);
+    console.log(`[socket] client connected: ${socket.id} (${io.engine.clientsCount} total)`);
 
     socket.on('disconnect', () => {
-      console.log(`[socket] client disconnected: ${socket.id}`);
+      console.log(`[socket] client disconnected: ${socket.id} (${io.engine.clientsCount} total)`);
     });
   });
 
