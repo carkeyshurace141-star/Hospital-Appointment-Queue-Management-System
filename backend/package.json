@@ -9,6 +9,8 @@
     "start": "node server.js",
     "seed:admin": "node scripts/createAdmin.js",
     "seed:departments": "node scripts/seedDepartments.js",
+    "seed:demo": "node scripts/seedDemoData.js",
+    "seed:live-queue": "node scripts/seedLiveQueue.js",
     "add:admin": "node scripts/addAdminInteractive.js",
     "test": "jest --runInBand",
     "test:fcfs": "jest scheduling-engine --runInBand",
