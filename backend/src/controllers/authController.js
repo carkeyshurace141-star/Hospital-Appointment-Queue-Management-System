@@ -22,6 +22,7 @@ function toPublicUser(user) {
     role: user.role,
     specialization: user.specialization,
     department: user.department,
+    availability: user.role === 'doctor' ? user.availability : undefined,
     mustChangePassword: user.mustChangePassword,
   };
 }

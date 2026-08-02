@@ -2,3 +2,4 @@ node_modules/
 .env
 coverage/
 *.log
+scheduling-engine/benchmark/benchmark-results.json

@@ -1,6 +1,32 @@
 const mongoose = require('mongoose');
 
-// Scaffolded for a later week — fields to be added when audit logging is built.
-const auditLogSchema = new mongoose.Schema({}, { collection: 'audit_logs' });
+const auditLogSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    action: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    targetType: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    targetId: {
+      type: String,
+      default: null,
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { collection: 'audit_logs' },
+);
 
 module.exports = mongoose.model('AuditLog', auditLogSchema);

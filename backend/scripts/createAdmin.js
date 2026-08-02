@@ -11,7 +11,9 @@ async function run() {
   const { ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD, MONGODB_URI } = process.env;
 
   if (!ADMIN_NAME || !ADMIN_EMAIL || !ADMIN_PASSWORD) {
-    console.error('[seed:admin] Set ADMIN_NAME, ADMIN_EMAIL and ADMIN_PASSWORD in your .env first.');
+    console.error(
+      '[seed:admin] Set ADMIN_NAME, ADMIN_EMAIL and ADMIN_PASSWORD in your .env first.',
+    );
     process.exitCode = 1;
     return;
   }
@@ -34,7 +36,9 @@ async function run() {
   try {
     const existingAdmin = await User.findOne({ role: 'admin' });
     if (existingAdmin) {
-      console.error(`[seed:admin] An admin account already exists (${existingAdmin.email}). Aborting.`);
+      console.error(
+        `[seed:admin] An admin account already exists (${existingAdmin.email}). Aborting.`,
+      );
       process.exitCode = 1;
       return;
     }

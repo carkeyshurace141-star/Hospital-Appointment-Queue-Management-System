@@ -18,6 +18,10 @@ function DevSocketListener() {
       console.log('[socket] server:ping', payload);
     });
 
+    socket.on('queue:updated', (payload) => {
+      console.log('[socket] queue:updated', payload);
+    });
+
     return () => {
       socket.disconnect();
     };

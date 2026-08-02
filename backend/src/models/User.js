@@ -1,5 +1,31 @@
 const mongoose = require('mongoose');
 
+// One start/end pair per weekday; both blank means "no hours set for this day".
+const workingHoursSchema = new mongoose.Schema(
+  {
+    start: { type: String, trim: true, default: '' },
+    end: { type: String, trim: true, default: '' },
+  },
+  { _id: false },
+);
+
+// Doctor-only. Kept deliberately simple: a working-hours pair per weekday,
+// plus a single override toggle for "unavailable today/right now" that
+// Smart Resource Allocation checks before assigning new patients.
+const availabilitySchema = new mongoose.Schema(
+  {
+    monday: workingHoursSchema,
+    tuesday: workingHoursSchema,
+    wednesday: workingHoursSchema,
+    thursday: workingHoursSchema,
+    friday: workingHoursSchema,
+    saturday: workingHoursSchema,
+    sunday: workingHoursSchema,
+    isUnavailable: { type: Boolean, default: false },
+  },
+  { _id: false },
+);
+
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -54,6 +80,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: '',
+    },
+    availability: {
+      type: availabilitySchema,
+      default: () => ({}),
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

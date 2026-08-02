@@ -8,8 +8,11 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "seed:admin": "node scripts/createAdmin.js",
+    "seed:departments": "node scripts/seedDepartments.js",
+    "add:admin": "node scripts/addAdminInteractive.js",
     "test": "jest --runInBand",
     "test:fcfs": "jest scheduling-engine --runInBand",
+    "benchmark": "node scheduling-engine/benchmark/report.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write ."

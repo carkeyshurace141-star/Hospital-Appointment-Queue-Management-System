@@ -5,6 +5,9 @@ const mongoSanitize = require('express-mongo-sanitize');
 
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const departmentRoutes = require('./routes/departmentRoutes');
+const appointmentRoutes = require('./routes/appointmentRoutes');
+const clinicianRoutes = require('./routes/clinicianRoutes');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 function createApp() {
@@ -23,6 +26,9 @@ function createApp() {
   app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/departments', departmentRoutes);
+  app.use('/api/appointments', appointmentRoutes);
+  app.use('/api/clinician', clinicianRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

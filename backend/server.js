@@ -13,7 +13,7 @@ async function start() {
   const app = createApp();
   const httpServer = http.createServer(app);
 
-  initSocket(httpServer, process.env.CLIENT_ORIGIN);
+  app.locals.io = initSocket(httpServer, process.env.CLIENT_ORIGIN);
 
   httpServer.listen(PORT, () => {
     console.log(`[server] listening on port ${PORT}`);

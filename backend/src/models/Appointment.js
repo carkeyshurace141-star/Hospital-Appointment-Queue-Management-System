@@ -1,6 +1,53 @@
 const mongoose = require('mongoose');
 
-// Scaffolded for a later week — fields to be added when booking/scheduling is built.
-const appointmentSchema = new mongoose.Schema({}, { collection: 'appointments' });
+const appointmentSchema = new mongoose.Schema(
+  {
+    patient: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    doctor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    department: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Department',
+      required: true,
+    },
+    category: {
+      type: String,
+      enum: ['emergency', 'critical', 'elderly', 'disabled', 'regular'],
+      required: true,
+    },
+    type: {
+      type: String,
+      enum: ['booked', 'walk-in'],
+      required: true,
+    },
+    timeSlot: {
+      type: Date,
+      required: function timeSlotRequired() {
+        return this.type === 'booked';
+      },
+    },
+    status: {
+      type: String,
+      enum: [
+        'booked',
+        'checked-in',
+        'in-queue',
+        'in-consultation',
+        'completed',
+        'no-show',
+        'cancelled',
+      ],
+      default: 'booked',
+    },
+  },
+  { collection: 'appointments', timestamps: { createdAt: true, updatedAt: false } },
+);
 
 module.exports = mongoose.model('Appointment', appointmentSchema);

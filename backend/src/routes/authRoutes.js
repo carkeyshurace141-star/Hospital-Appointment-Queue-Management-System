@@ -18,7 +18,10 @@ const loginLimiter = rateLimit({
 });
 
 const signupValidation = [
-  body('name').trim().isLength({ min: 2, max: 100 }).withMessage('Name must be at least 2 characters.'),
+  body('name')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Name must be at least 2 characters.'),
   body('email').trim().isEmail().withMessage('Please provide a valid email address.'),
   body('phone')
     .trim()
