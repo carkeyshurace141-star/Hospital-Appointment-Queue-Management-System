@@ -34,7 +34,7 @@ describe('runBenchmark', () => {
     expect(emergency.waitingTime).toBeLessThan(regular.waitingTime);
   });
 
-  test('multi-level-queue eventually serves a regular walk-in even under a steady stream of emergencies (starvation prevention)', () => {
+  test('multi-level-queue never interrupts a waiting emergency, then promotes the aged regular patient the instant the emergency surge ends', () => {
     const arrivals = [
       {
         id: 'regular-1',
@@ -44,10 +44,12 @@ describe('runBenchmark', () => {
         arrivalTime: 0,
       },
     ];
-    // An emergency patient every 5 simulated minutes for a long stretch —
-    // long enough to blow past the 15-minute aging threshold many times
-    // over if aging were broken.
-    for (let i = 0; i < 30; i += 1) {
+    // A back-to-back surge of emergencies for the first 25 simulated
+    // minutes, then nothing. Emergency is never preempted by aging, so
+    // every one of these must be fully served before the regular patient
+    // can go next — but aging still protects the regular patient the
+    // moment the surge ends, rather than leaving them stuck indefinitely.
+    for (let i = 0; i < 5; i += 1) {
       arrivals.push({
         id: `emergency-${i}`,
         category: 'emergency',
@@ -59,12 +61,15 @@ describe('runBenchmark', () => {
 
     const result = runBenchmark(arrivals, 'multi-level-queue');
     const regular = result.results.find((r) => r.id === 'regular-1');
+    const emergencies = result.results.filter((r) => r.id.startsWith('emergency-'));
 
-    // Without priority aging, the regular walk-in would be stuck behind a
-    // continuous stream of emergencies for the whole ~150-minute run.
-    // Aging (15-minute threshold) should promote it well before then.
-    expect(regular).toBeDefined();
-    expect(regular.waitingTime).toBeLessThan(40);
+    expect(emergencies).toHaveLength(5);
+    emergencies.forEach((e) => expect(e.waitingTime).toBe(0));
+
+    // 5 emergencies x 5 minutes each = 25 minutes of uninterrupted
+    // emergency care before the regular patient is ever picked up.
+    expect(regular.responseTime).toBe(25);
+    expect(regular.waitingTime).toBe(25);
   });
 
   test('total busy time never exceeds total elapsed simulated time', () => {

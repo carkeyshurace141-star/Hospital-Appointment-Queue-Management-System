@@ -92,7 +92,7 @@ describe('MultiLevelQueueScheduler', () => {
     expect(scheduler.remove('missing')).toBeNull();
   });
 
-  test('starvation prevention: aging eventually serves a regular walk-in patient despite continuous emergency arrivals', () => {
+  test('emergency is never preempted by aging, even once a lower-tier patient has starved', () => {
     const scheduler = new MultiLevelQueueScheduler(15 * 60 * 1000);
     const start = Date.now();
     scheduler.enqueue({ id: 'walkin-1', category: 'regular', type: 'walk-in', queuedAt: start });
@@ -118,10 +118,35 @@ describe('MultiLevelQueueScheduler', () => {
       queuedAt: start + 2000,
     });
 
-    // Once the walk-in patient's wait exceeds the aging threshold, they are
-    // promoted ahead of everything else, even with emergencies still queued.
+    // Even once the walk-in patient's wait exceeds the aging threshold,
+    // emergency patients are never preempted — aging only reorders among
+    // the non-emergency tiers.
     const later = scheduler.serveNext(start + 16 * 60 * 1000);
-    expect(later.patient.id).toBe('walkin-1');
+    expect(later.patient.category).toBe('emergency');
     expect(scheduler.queues.emergency.isEmpty()).toBe(false);
+  });
+
+  test('aging promotes a starved patient ahead of a fresher lower-tier arrival once emergency is empty', () => {
+    const scheduler = new MultiLevelQueueScheduler(15 * 60 * 1000);
+    const start = Date.now();
+    scheduler.enqueue({ id: 'walkin-1', category: 'regular', type: 'walk-in', queuedAt: start });
+    scheduler.enqueue({ id: 'emergency-1', category: 'emergency', type: 'walk-in', queuedAt: start });
+
+    // Drain the only emergency patient.
+    const first = scheduler.serveNext(start + 16 * 60 * 1000);
+    expect(first.patient.id).toBe('emergency-1');
+
+    // A fresh (non-aged) elderly patient arrives after emergency has cleared.
+    scheduler.enqueue({
+      id: 'elderly-fresh',
+      category: 'elderly',
+      type: 'walk-in',
+      queuedAt: start + 16 * 60 * 1000,
+    });
+
+    // With no emergency waiting, the aged regular walk-in is promoted ahead
+    // of the fresher elderly patient.
+    const next = scheduler.serveNext(start + 16 * 60 * 1000 + 1000);
+    expect(next.patient.id).toBe('walkin-1');
   });
 });

@@ -6,8 +6,8 @@ const RoundRobinQueue = require('./roundRobin');
 // constant stream of Emergency arrivals.
 const DEFAULT_AGING_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
 
-// Emergency is excluded: it is already the top-priority level, so it never
-// needs to be promoted by aging.
+// Emergency is excluded: it is always served first and can never be
+// preempted by an aged patient from a lower tier (see serveNext).
 const AGEABLE_LEVELS = ['elderlyOrDisabled', 'booked', 'walkIn'];
 
 function levelForPatient(patient) {
@@ -61,16 +61,19 @@ class MultiLevelQueueScheduler {
     return candidate;
   }
 
-  // Serves the next patient. Aged patients (waited past the threshold) are
-  // promoted ahead of everything else; otherwise emergency drains first,
-  // then elderly/disabled, then booked and walk-in alternate fairly.
+  // Serves the next patient. Emergency always drains first and can never be
+  // preempted by aging — aging only decides ordering among the non-emergency
+  // tiers. Once emergency is empty, aged patients (waited past the
+  // threshold) are promoted ahead of everything else; otherwise
+  // elderly/disabled drains next, then booked and walk-in alternate fairly.
   serveNext(now = Date.now()) {
+    if (!this.queues.emergency.isEmpty()) return this._serveFrom('emergency');
+
     const aged = this._findAgedCandidate(now);
     if (aged) {
       return this._serveFrom(aged.level);
     }
 
-    if (!this.queues.emergency.isEmpty()) return this._serveFrom('emergency');
     if (!this.queues.elderlyOrDisabled.isEmpty()) return this._serveFrom('elderlyOrDisabled');
 
     const alternationOrder =

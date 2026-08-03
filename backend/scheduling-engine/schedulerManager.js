@@ -1,7 +1,11 @@
 // In-process registry of one MultiLevelQueueScheduler per department.
-// Deliberately not persisted — schedulers reset when the server restarts.
-// Longer-term persistence is out of scope for this stage of the project.
+// Not persisted directly — schedulers reset when the server restarts — but
+// hydrateFromDatabase() below rebuilds them from the Appointment/Token
+// collections on startup so a restart never silently drops patients who are
+// still waiting.
 const MultiLevelQueueScheduler = require('./multiLevelQueue');
+const Appointment = require('../src/models/Appointment');
+const Token = require('../src/models/Token');
 
 const schedulers = new Map();
 
@@ -57,6 +61,53 @@ function resetSchedulers() {
   lastSkipped.clear();
 }
 
+// Rebuilds every department's in-memory scheduler from the database. Called
+// once at server startup so a restart can never leave the DB saying a
+// patient is "in-queue" while the live queue itself has no idea they exist.
+//
+// 'in-consultation' appointments are restored to the queue too (as
+// currentServing is transient in-memory state that a restart always loses
+// anyway) so a patient who was mid-consultation when the server went down
+// isn't left stranded — the doctor just calls them again via Call Next.
+async function hydrateFromDatabase() {
+  const appointments = await Appointment.find({
+    status: { $in: ['in-queue', 'in-consultation'] },
+  }).sort({ createdAt: 1 });
+
+  if (appointments.length === 0) return { restored: 0 };
+
+  const appointmentIds = appointments.map((appointment) => appointment._id);
+  const tokens = await Token.find({ appointment: { $in: appointmentIds } });
+  const tokenByAppointment = new Map(tokens.map((t) => [t.appointment.toString(), t]));
+
+  let restored = 0;
+  for (const appointment of appointments) {
+    const token = tokenByAppointment.get(appointment._id.toString());
+    const scheduler = getScheduler(appointment.department);
+
+    scheduler.enqueue({
+      id: appointment._id.toString(),
+      category: appointment.category,
+      type: appointment.type,
+      tokenNumber: token ? token.tokenNumber : null,
+      queuedAt: (token ? token.issuedAt : appointment.createdAt).getTime(),
+    });
+    restored += 1;
+
+    if (appointment.status !== 'in-queue') {
+      appointment.status = 'in-queue';
+      await appointment.save();
+    }
+    if (token && token.status !== 'waiting') {
+      token.status = 'waiting';
+      token.calledAt = null;
+      await token.save();
+    }
+  }
+
+  return { restored };
+}
+
 module.exports = {
   getScheduler,
   getCurrentServing,
@@ -66,4 +117,5 @@ module.exports = {
   setLastSkipped,
   clearLastSkipped,
   resetSchedulers,
+  hydrateFromDatabase,
 };

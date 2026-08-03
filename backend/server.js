@@ -3,12 +3,16 @@ const http = require('http');
 const createApp = require('./src/app');
 const connectDB = require('./src/config/db');
 const initSocket = require('./src/config/socket');
+const { hydrateFromDatabase } = require('./scheduling-engine/schedulerManager');
 
 const PORT = process.env.PORT || 5000;
 
 async function start() {
   await connectDB(process.env.MONGODB_URI);
   console.log('[db] connected to MongoDB');
+
+  const { restored } = await hydrateFromDatabase();
+  console.log(`[scheduler] restored ${restored} queued patient(s) from the database`);
 
   const app = createApp();
   const httpServer = http.createServer(app);
