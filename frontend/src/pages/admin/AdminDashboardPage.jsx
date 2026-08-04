@@ -96,7 +96,7 @@ function AdminDashboardPage() {
                 className="rounded-lg border border-stone-200 bg-white p-4 text-center dark:border-stone-800 dark:bg-stone-900"
               >
                 <p className="text-2xl font-bold text-teal-700 dark:text-teal-400">
-                  {overview ? overview[tile.key] : '—'}
+                  {overview ? overview[tile.key] : '-'}
                 </p>
                 <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">{tile.label}</p>
               </div>

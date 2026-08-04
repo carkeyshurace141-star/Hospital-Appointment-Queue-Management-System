@@ -44,4 +44,26 @@ async function assignDoctor(departmentId) {
   return chosenDoctor;
 }
 
-module.exports = { assignDoctor };
+// Guards against double-booking a doctor at the exact same time. Cancelled/
+// completed/no-show appointments don't count, so cancelling (or the slot
+// simply not being reserved) always frees that doctor's time back up for
+// someone else to book. `excludeAppointmentId` lets a reschedule check
+// availability without conflicting with the appointment being moved.
+async function ensureDoctorSlotAvailable(doctorId, timeSlot, excludeAppointmentId = null) {
+  const conflict = await Appointment.findOne({
+    doctor: doctorId,
+    timeSlot,
+    status: { $in: ACTIVE_STATUSES },
+    ...(excludeAppointmentId ? { _id: { $ne: excludeAppointmentId } } : {}),
+  });
+
+  if (conflict) {
+    const err = new Error(
+      'This doctor already has an appointment at that time. Please choose another slot.',
+    );
+    err.status = 409;
+    throw err;
+  }
+}
+
+module.exports = { assignDoctor, ensureDoctorSlotAvailable, ACTIVE_STATUSES };

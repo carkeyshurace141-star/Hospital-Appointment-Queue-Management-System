@@ -1,11 +1,13 @@
 const User = require('../models/User');
 const Department = require('../models/Department');
+const Specialization = require('../models/Specialization');
 const Appointment = require('../models/Appointment');
 const Token = require('../models/Token');
 const AuditLog = require('../models/AuditLog');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { hashPassword, generateTemporaryPassword } = require('../utils/password');
 const { toPublicDepartment } = require('./departmentController');
+const { toPublicSpecialization } = require('./specializationController');
 const { toCsv } = require('../utils/csv');
 
 function startOfToday() {
@@ -85,6 +87,18 @@ const createDepartment = asyncHandler(async (req, res) => {
 
   const department = await Department.create({ name, description });
   res.status(201).json({ department: toPublicDepartment(department) });
+});
+
+const createSpecialization = asyncHandler(async (req, res) => {
+  const { name } = req.body;
+
+  const existing = await Specialization.findOne({ name: name.trim() });
+  if (existing) {
+    return res.status(409).json({ message: 'A specialization with that name already exists.' });
+  }
+
+  const specialization = await Specialization.create({ name });
+  res.status(201).json({ specialization: toPublicSpecialization(specialization) });
 });
 
 // Live snapshot for the admin System Performance Overview. Deliberately
@@ -200,7 +214,7 @@ const getDoctorWorkloadReport = asyncHandler(async (req, res) => {
 });
 
 // Average wait (issuedAt -> calledAt) and token volume per department over
-// the range — "queue length over a range" is read as total tokens issued
+// the range - "queue length over a range" is read as total tokens issued
 // in that window, not an instantaneous snapshot.
 const getQueuePerformanceReport = asyncHandler(async (req, res) => {
   const { from, to } = parseDateRange(req.query);
@@ -247,6 +261,7 @@ module.exports = {
   addDoctor,
   listDoctors,
   createDepartment,
+  createSpecialization,
   getOverview,
   getAuditLog,
   getDoctorWorkloadReport,

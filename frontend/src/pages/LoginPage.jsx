@@ -49,7 +49,7 @@ function LoginPage() {
       login(data.token, data.user);
       navigate(homeRouteForRole(data.user.role));
     } catch (_err) {
-      // Never reveal whether the email exists — always a generic message.
+      // Never reveal whether the email exists - always a generic message.
       setServerError('Incorrect email or password.');
     } finally {
       setIsSubmitting(false);

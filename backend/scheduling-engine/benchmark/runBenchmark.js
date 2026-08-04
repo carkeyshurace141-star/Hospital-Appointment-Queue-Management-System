@@ -7,7 +7,7 @@ const MultiLevelQueueScheduler = require('../multiLevelQueue');
 // times and consultation lengths from generateArrivals.js are already in
 // minutes). RoundRobinQueue's timeQuantum is documented in minutes too, so
 // it can be reused as-is. MultiLevelQueueScheduler's aging threshold is
-// normally real wall-clock milliseconds — here it's given a value in the
+// normally real wall-clock milliseconds - here it's given a value in the
 // same "minutes" unit as this simulation's clock instead, since the class
 // only compares `now - queuedAt` against it and doesn't care what unit
 // that is, as long as it's consistent.
@@ -41,7 +41,7 @@ function createEngine(algorithm) {
 
 // Runs a single-server discrete-event simulation of `arrivals` (as produced
 // by generateArrivals.js) through one scheduling algorithm's real
-// production queue class. A single server is a deliberate simplification —
+// production queue class. A single server is a deliberate simplification -
 // this benchmark compares how each algorithm *orders* patients, not
 // multi-doctor department capacity, which is out of scope here.
 //
@@ -66,7 +66,7 @@ function runBenchmark(arrivals, algorithm) {
         type: arrival.type,
         serviceNeed: arrival.consultationMinutes,
         remainingServiceNeed: arrival.consultationMinutes,
-        // Explicit, simulated-minutes queuedAt — MultiLevelQueueScheduler
+        // Explicit, simulated-minutes queuedAt - MultiLevelQueueScheduler
         // would otherwise default this to a real Date.now() wall-clock
         // value, which is meaningless against this simulation's clock and
         // would silently disable priority aging.

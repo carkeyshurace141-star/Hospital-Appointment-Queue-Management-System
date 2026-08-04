@@ -7,7 +7,7 @@ const Appointment = require('../src/models/Appointment');
 const Token = require('../src/models/Token');
 const { hashPassword } = require('../src/utils/password');
 
-// Fixed demo credentials — printed at the end. Every seeded account uses
+// Fixed demo credentials - printed at the end. Every seeded account uses
 // one of these two passwords so they're easy to log in with by hand.
 const PATIENT_PASSWORD = 'SeedPatient#2026';
 const DOCTOR_PASSWORD = 'SeedDoctor#2026';
@@ -347,7 +347,7 @@ async function run() {
     let counts = { appointments: 0, tokens: 0 };
     if (alreadySeeded) {
       console.log(
-        '[seed:demo] Appointments already exist in this database — skipping appointment/token seeding to avoid duplicates. Re-run with SEED_FORCE=1 to add another batch anyway.',
+        '[seed:demo] Appointments already exist in this database - skipping appointment/token seeding to avoid duplicates. Re-run with SEED_FORCE=1 to add another batch anyway.',
       );
     } else {
       counts = await seedAppointments(departments, doctors, patients);

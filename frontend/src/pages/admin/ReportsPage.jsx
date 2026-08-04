@@ -190,7 +190,7 @@ function ReportsPage() {
         </p>
         {benchmarkError ? (
           <p className="mt-3 text-sm text-stone-600 dark:text-stone-400">
-            No benchmark results yet — run <code>npm run benchmark</code> in the backend.
+            No benchmark results yet - run <code>npm run benchmark</code> in the backend.
           </p>
         ) : benchmark ? (
           Object.entries(benchmark.results).map(([scenario, perAlgorithm]) => (

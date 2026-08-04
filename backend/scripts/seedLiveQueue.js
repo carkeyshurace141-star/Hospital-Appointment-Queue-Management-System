@@ -71,7 +71,7 @@ async function run() {
   console.log(`[seed:live-queue] Talking to ${BASE_URL}`);
 
   // Optional: SEED_DEPARTMENTS="Orthopedics,Pediatrics" to (re)run only a
-  // subset — handy for picking up where a run left off after hitting the
+  // subset - handy for picking up where a run left off after hitting the
   // login rate limiter (10 attempts / 15 min per IP, see authRoutes.js).
   const onlyDepartments = process.env.SEED_DEPARTMENTS
     ? new Set(process.env.SEED_DEPARTMENTS.split(',').map((s) => s.trim()))
@@ -87,7 +87,7 @@ async function run() {
     if (onlyDepartments && !onlyDepartments.has(deptName)) continue;
     const department = departmentByName.get(deptName);
     if (!department) {
-      console.warn(`[seed:live-queue] Department "${deptName}" not found — run npm run seed:demo first. Skipping.`);
+      console.warn(`[seed:live-queue] Department "${deptName}" not found - run npm run seed:demo first. Skipping.`);
       continue;
     }
 

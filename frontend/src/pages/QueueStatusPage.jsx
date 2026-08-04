@@ -103,7 +103,7 @@ function QueueStatusPage() {
       <div className="rounded-lg border border-stone-200 bg-white p-6 text-center dark:border-stone-800 dark:bg-stone-950 sm:p-8">
         <p className="text-sm text-stone-600 dark:text-stone-400">{status.department?.name}</p>
         <p className="mt-1 text-5xl font-bold text-teal-700 dark:text-teal-400">
-          {status.tokenNumber ?? '—'}
+          {status.tokenNumber ?? '-'}
         </p>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">Your token number</p>
 
@@ -113,7 +113,7 @@ function QueueStatusPage() {
             aria-live="assertive"
             className="mt-6 rounded-md bg-teal-600 px-4 py-3 text-lg font-semibold text-white"
           >
-            You are being called now — please proceed to the consultation room.
+            You are being called now - please proceed to the consultation room.
           </p>
         ) : (
           <div role="status" aria-live="polite" className="mt-6 space-y-1">

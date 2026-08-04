@@ -1,5 +1,5 @@
 // Standalone FCFS (first-come-first-served) baseline queue.
-// Not wired into any route yet — later weeks will build priority scheduling on top of this.
+// Not wired into any route yet - later weeks will build priority scheduling on top of this.
 class FCFSQueue {
   constructor() {
     this.items = [];

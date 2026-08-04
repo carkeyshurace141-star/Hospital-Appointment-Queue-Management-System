@@ -18,7 +18,7 @@ describe('runBenchmark', () => {
   test('priority algorithm serves an emergency patient before an earlier-arriving regular patient', () => {
     // A "blocker" patient keeps the single server busy from t=0-5, so that
     // by the time the server frees up, both regular-1 (arrived at t=1) and
-    // emergency-1 (arrived at t=3) are already waiting together — that's
+    // emergency-1 (arrived at t=3) are already waiting together - that's
     // the only point at which priority ordering actually has a choice to
     // make (non-preemptive: a patient already in service can't be bumped).
     const arrivals = [
@@ -47,7 +47,7 @@ describe('runBenchmark', () => {
     // A back-to-back surge of emergencies for the first 25 simulated
     // minutes, then nothing. Emergency is never preempted by aging, so
     // every one of these must be fully served before the regular patient
-    // can go next — but aging still protects the regular patient the
+    // can go next - but aging still protects the regular patient the
     // moment the surge ends, rather than leaving them stuck indefinitely.
     for (let i = 0; i < 5; i += 1) {
       arrivals.push({

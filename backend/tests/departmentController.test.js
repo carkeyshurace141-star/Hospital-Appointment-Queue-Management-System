@@ -3,6 +3,11 @@ const request = require('supertest');
 const createApp = require('../src/app');
 const Department = require('../src/models/Department');
 const User = require('../src/models/User');
+const {
+  getScheduler,
+  setCurrentServing,
+  resetSchedulers,
+} = require('../scheduling-engine/schedulerManager');
 
 const app = createApp();
 
@@ -45,6 +50,35 @@ describe('GET /api/departments/:id/doctors', () => {
   test('returns 404 when the department does not exist (failure case)', async () => {
     const fakeId = '507f1f77bcf86cd799439011';
     const res = await request(app).get(`/api/departments/${fakeId}/doctors`);
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/departments/:id/queue-summary', () => {
+  afterEach(() => resetSchedulers());
+
+  test('reports current token, waiting count, and next tokens without patient identity (happy path)', async () => {
+    const department = await Department.create({ name: 'General Medicine' });
+    const scheduler = getScheduler(department._id);
+    scheduler.enqueue({ id: 'a1', category: 'regular', type: 'walk-in', tokenNumber: 'GM-002' });
+    scheduler.enqueue({ id: 'a2', category: 'regular', type: 'walk-in', tokenNumber: 'GM-003' });
+    setCurrentServing(department._id, { id: 'a0', tokenNumber: 'GM-001' });
+
+    const res = await request(app).get(`/api/departments/${department._id}/queue-summary`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      department: { id: department._id.toString(), name: 'General Medicine' },
+      currentTokenNumber: 'GM-001',
+      waitingCount: 2,
+      nextTokenNumbers: ['GM-002', 'GM-003'],
+    });
+  });
+
+  test('returns 404 when the department does not exist (failure case)', async () => {
+    const fakeId = '507f1f77bcf86cd799439011';
+    const res = await request(app).get(`/api/departments/${fakeId}/queue-summary`);
 
     expect(res.status).toBe(404);
   });

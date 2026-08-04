@@ -1,8 +1,8 @@
 const AuditLog = require('../models/AuditLog');
 
 // Records an audit entry after the main handler succeeds. Fire-and-forget
-// by design — writing the audit trail must never slow down or fail the
-// actual request — but failures are not swallowed silently, they're
+// by design - writing the audit trail must never slow down or fail the
+// actual request - but failures are not swallowed silently, they're
 // logged server-side so a broken audit trail is still noticed.
 //
 // The target id is usually not known until the controller runs (e.g. which

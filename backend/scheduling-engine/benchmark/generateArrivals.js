@@ -9,7 +9,7 @@ const DEFAULT_CATEGORY_MIX = {
 };
 
 // mulberry32: a small, fast, deterministic PRNG. Math.random() cannot be
-// seeded, which would make benchmark runs unreproducible — this is what
+// seeded, which would make benchmark runs unreproducible - this is what
 // lets `report.js --seed=N` produce byte-identical results every time.
 function mulberry32(seed) {
   let state = seed >>> 0;
@@ -47,7 +47,7 @@ function pickCategory(randomValue, categoryMix, categories) {
 // Builds `count` arrival timestamps (in simulated minutes from t=0).
 // 'steady': evenly spaced arrivals with small jitter (one patient every
 // 3-7 minutes). 'bursty': clusters of 2-7 patients arriving within a
-// couple of minutes of each other, separated by 10-30 minute lulls —
+// couple of minutes of each other, separated by 10-30 minute lulls -
 // modelling e.g. a walk-in rush after a bus/shift change.
 function buildArrivalTimes(count, pattern, rng) {
   const times = [];

@@ -4,6 +4,7 @@ const {
   addDoctor,
   listDoctors,
   createDepartment,
+  createSpecialization,
   getOverview,
   getAuditLog,
   getDoctorWorkloadReport,
@@ -48,6 +49,13 @@ const createDepartmentValidation = [
     .withMessage('Description is too long.'),
 ];
 
+const createSpecializationValidation = [
+  body('name')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Name must be at least 2 characters.'),
+];
+
 router.post(
   '/doctors',
   requireAuth,
@@ -64,6 +72,14 @@ router.post(
   createDepartmentValidation,
   validate,
   createDepartment,
+);
+router.post(
+  '/specializations',
+  requireAuth,
+  requireRole('admin'),
+  createSpecializationValidation,
+  validate,
+  createSpecialization,
 );
 router.get(
   '/overview',

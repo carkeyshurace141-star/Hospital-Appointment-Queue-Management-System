@@ -22,7 +22,7 @@ class ErrorBoundary extends Component {
             Something went wrong.
           </h1>
           <p className="max-w-md text-stone-600 dark:text-stone-400">
-            We hit an unexpected error. Try reloading the page — if the problem continues, please
+            We hit an unexpected error. Try reloading the page - if the problem continues, please
             check back later.
           </p>
           <button

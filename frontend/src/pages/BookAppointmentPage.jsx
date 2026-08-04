@@ -197,7 +197,7 @@ function BookAppointmentPage() {
               disabled={isLoadingDoctors}
               options={doctors.map((d) => ({
                 value: d.id,
-                label: d.specialization ? `${d.name} — ${d.specialization}` : d.name,
+                label: d.specialization ? `${d.name} - ${d.specialization}` : d.name,
               }))}
             />
           ) : null}

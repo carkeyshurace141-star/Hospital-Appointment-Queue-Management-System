@@ -1,5 +1,5 @@
 // In-process registry of one MultiLevelQueueScheduler per department.
-// Not persisted directly — schedulers reset when the server restarts — but
+// Not persisted directly - schedulers reset when the server restarts - but
 // hydrateFromDatabase() below rebuilds them from the Appointment/Token
 // collections on startup so a restart never silently drops patients who are
 // still waiting.
@@ -68,7 +68,7 @@ function resetSchedulers() {
 // 'in-consultation' appointments are restored to the queue too (as
 // currentServing is transient in-memory state that a restart always loses
 // anyway) so a patient who was mid-consultation when the server went down
-// isn't left stranded — the doctor just calls them again via Call Next.
+// isn't left stranded - the doctor just calls them again via Call Next.
 async function hydrateFromDatabase() {
   const appointments = await Appointment.find({
     status: { $in: ['in-queue', 'in-consultation'] },

@@ -3,15 +3,22 @@ const Department = require('../models/Department');
 const User = require('../models/User');
 const Token = require('../models/Token');
 const { asyncHandler } = require('../middleware/errorHandler');
-const { assignDoctor } = require('../utils/resourceAllocation');
+const { assignDoctor, ensureDoctorSlotAvailable } = require('../utils/resourceAllocation');
 const { generateToken } = require('../utils/tokenGenerator');
 const { broadcastQueueUpdate } = require('../utils/queueBroadcast');
+const { sendAppointmentConfirmationEmail } = require('../utils/appointmentEmail');
 const { getScheduler } = require('../../scheduling-engine/schedulerManager');
 
 // Used as the estimated per-patient consultation length until there is
 // real data for the department today (see averageConsultationMinutesToday);
 // matches RoundRobinQueue's own default time quantum for consistency.
 const DEFAULT_CONSULTATION_MINUTES = 10;
+
+// A patient can back out any time before they're actually being seen.
+// 'in-consultation' is deliberately excluded - once the doctor has called
+// them in, cancelling from the patient side would leave the consultation
+// in a confusing state.
+const CANCELLABLE_STATUSES = ['booked', 'checked-in', 'in-queue'];
 
 function toPublicAppointment(appointment) {
   const { department, doctor } = appointment;
@@ -60,7 +67,7 @@ async function enqueueAppointment(appointment, io) {
   return token;
 }
 
-// See Sprint 2 Task 3: a simple estimate, not a promise — average length of
+// See Sprint 2 Task 3: a simple estimate, not a promise - average length of
 // consultations completed in this department so far today (falling back to
 // DEFAULT_CONSULTATION_MINUTES before any data exists), multiplied by the
 // patient's position in the queue.
@@ -112,6 +119,7 @@ const createAppointment = asyncHandler(async (req, res) => {
   }
 
   const doctor = await resolveDoctor(department, doctorId);
+  await ensureDoctorSlotAvailable(doctor._id, timeSlot);
 
   const appointment = await Appointment.create({
     patient: req.user._id,
@@ -125,6 +133,10 @@ const createAppointment = asyncHandler(async (req, res) => {
 
   await appointment.populate('department');
   await appointment.populate('doctor');
+
+  // Best-effort: sendAppointmentConfirmationEmail never throws, so a mail
+  // outage never turns a successful booking into a failed request.
+  await sendAppointmentConfirmationEmail(appointment, req.user);
 
   res.status(201).json({ appointment: toPublicAppointment(appointment) });
 });
@@ -176,12 +188,53 @@ const cancelAppointment = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'You do not have permission to do that.' });
   }
 
-  if (appointment.status !== 'booked') {
-    return res.status(400).json({ message: 'Only booked appointments can be cancelled.' });
+  if (!CANCELLABLE_STATUSES.includes(appointment.status)) {
+    return res
+      .status(400)
+      .json({ message: 'Only booked, checked-in, or queued appointments can be cancelled.' });
+  }
+
+  // Queued patients also need pulling out of the live scheduler and their
+  // token invalidated, or they'd still get called despite being cancelled.
+  if (appointment.status === 'in-queue') {
+    const scheduler = getScheduler(appointment.department);
+    scheduler.remove(appointment._id.toString());
+    await Token.findOneAndUpdate({ appointment: appointment._id }, { status: 'cancelled' });
+    broadcastQueueUpdate(req.app.locals.io, appointment.department, scheduler);
   }
 
   appointment.status = 'cancelled';
   await appointment.save();
+
+  res.status(200).json({ appointment: toPublicAppointment(appointment) });
+});
+
+const rescheduleAppointment = asyncHandler(async (req, res) => {
+  const appointment = await Appointment.findById(req.params.id);
+  if (!appointment) {
+    return res.status(404).json({ message: 'Appointment not found.' });
+  }
+
+  const isOwner = appointment.patient.toString() === req.user._id.toString();
+  if (!isOwner && req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'You do not have permission to do that.' });
+  }
+
+  if (appointment.status !== 'booked') {
+    return res.status(400).json({ message: 'Only booked appointments can be rescheduled.' });
+  }
+
+  const { timeSlot } = req.body;
+  await ensureDoctorSlotAvailable(appointment.doctor, timeSlot, appointment._id);
+
+  appointment.timeSlot = timeSlot;
+  // A reminder already sent for the old time no longer applies to the new
+  // one - let the sweep (appointmentReminderJob.js) send it again.
+  appointment.reminderSentAt = null;
+  await appointment.save();
+
+  await appointment.populate('department');
+  await appointment.populate('doctor');
 
   res.status(200).json({ appointment: toPublicAppointment(appointment) });
 });
@@ -248,6 +301,7 @@ module.exports = {
   createWalkIn,
   listMine,
   cancelAppointment,
+  rescheduleAppointment,
   checkIn,
   queueStatus,
   toPublicAppointment,

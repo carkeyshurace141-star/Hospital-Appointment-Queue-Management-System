@@ -46,6 +46,12 @@ const appointmentSchema = new mongoose.Schema(
       ],
       default: 'booked',
     },
+    // Set once the 2-hours-before reminder email has gone out, so the
+    // periodic sweep (appointmentReminderJob.js) never sends it twice.
+    reminderSentAt: {
+      type: Date,
+      default: null,
+    },
   },
   { collection: 'appointments', timestamps: { createdAt: true, updatedAt: false } },
 );

@@ -34,7 +34,7 @@ This project replaces the traditional First-Come-First-Served (FCFS) queuing mod
 
 Hospital outpatient clinics commonly use First-Come-First-Served (FCFS) queuing, treating every patient identically regardless of urgency. This means Emergency, Critical, Elderly and Disabled patients can wait just as long as Regular patients, and no-shows stall the queue with no automated recovery.
 
-This project asks whether a **Multi-Level Queue Scheduling** model - with **priority aging** to prevent starvation — can reduce waiting time and improve fairness compared to FCFS, while remaining efficient and simple enough to deploy in a real clinical setting.
+This project asks whether a **Multi-Level Queue Scheduling** model - with **priority aging** to prevent starvation - can reduce waiting time and improve fairness compared to FCFS, while remaining efficient and simple enough to deploy in a real clinical setting.
 
 ## Research Question
 
@@ -65,7 +65,7 @@ This project asks whether a **Multi-Level Queue Scheduling** model - with **prio
 | Database | MongoDB (Mongoose) |
 | Real-time | Socket.io (WebSocket) |
 | Authentication | JWT, bcrypt |
-| Notifications | Twilio (SMS), SendGrid (Email) — sandbox mode |
+| Notifications | Twilio (SMS), SendGrid (Email) - sandbox mode |
 | Testing | Jest, Supertest, Postman/Newman |
 | API Docs | Swagger / OpenAPI |
 
@@ -102,7 +102,7 @@ Patient Portal  →  Backend API / Database  →  Scheduling Engine  →  Clinic
 | **FCFS** | Baseline / control condition only |
 | **Priority Scheduling** | Orders patients by category (Emergency → Critical → Elderly/Disabled → Regular), with an emergency override |
 | **Round Robin** | Fair rotation within a category using a configurable time quantum |
-| **Multi-Level Queue Scheduling** | The system's core algorithm — four parallel queues (Emergency, Elderly & Disabled, Booked Appointment, Walk-In), priority ordering between queues, Round Robin within each queue, plus **priority aging** so no patient waits indefinitely |
+| **Multi-Level Queue Scheduling** | The system's core algorithm - four parallel queues (Emergency, Elderly & Disabled, Booked Appointment, Walk-In), priority ordering between queues, Round Robin within each queue, plus **priority aging** so no patient waits indefinitely |
 
 ## Evaluation Metrics
 

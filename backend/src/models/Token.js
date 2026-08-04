@@ -30,7 +30,7 @@ const tokenSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['waiting', 'called', 'completed', 'no-show'],
+      enum: ['waiting', 'called', 'completed', 'no-show', 'cancelled'],
       default: 'waiting',
     },
   },

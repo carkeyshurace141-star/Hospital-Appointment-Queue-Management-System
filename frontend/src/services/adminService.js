@@ -18,6 +18,22 @@ function listDoctors(token) {
   return request('/api/admin/doctors', { token });
 }
 
+function createDepartment({ name, description }, token) {
+  return request('/api/admin/departments', {
+    method: 'POST',
+    body: { name, description },
+    token,
+  });
+}
+
+function createSpecialization({ name }, token) {
+  return request('/api/admin/specializations', {
+    method: 'POST',
+    body: { name },
+    token,
+  });
+}
+
 function getOverview(token) {
   return request('/api/admin/overview', { token });
 }
@@ -42,7 +58,7 @@ function getBenchmarkResults(token) {
 }
 
 // Reports are auth-protected, so the CSV can't just be a plain <a href>
-// link — fetch it with the bearer token, then trigger the browser download
+// link - fetch it with the bearer token, then trigger the browser download
 // from the resulting blob.
 async function downloadReportCsv(path, params, token, filename) {
   const query = toQueryString({ ...params, format: 'csv' });
@@ -68,6 +84,8 @@ async function downloadReportCsv(path, params, token, filename) {
 export {
   addDoctor,
   listDoctors,
+  createDepartment,
+  createSpecialization,
   getOverview,
   getAuditLog,
   getDoctorWorkloadReport,

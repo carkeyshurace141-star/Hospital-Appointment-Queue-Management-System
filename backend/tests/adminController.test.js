@@ -3,6 +3,7 @@ const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const createApp = require('../src/app');
 const Department = require('../src/models/Department');
+const Specialization = require('../src/models/Specialization');
 const User = require('../src/models/User');
 const Appointment = require('../src/models/Appointment');
 const Token = require('../src/models/Token');
@@ -220,5 +221,87 @@ describe('GET /api/admin/reports/queue-performance', () => {
       .set('Authorization', `Bearer ${tokenFor(admin)}`);
 
     expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /api/admin/departments', () => {
+  test('creates a new department on top of the seeded ones (happy path)', async () => {
+    await Department.create({ name: 'Cardiology' });
+    const admin = await createUser('Ad Min', 'admin');
+
+    const res = await request(app)
+      .post('/api/admin/departments')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ name: 'Neurology', description: 'Brain and nervous system.' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.department.name).toBe('Neurology');
+
+    const all = await Department.find().sort({ name: 1 });
+    expect(all.map((d) => d.name)).toEqual(['Cardiology', 'Neurology']);
+  });
+
+  test('rejects a duplicate department name (failure case)', async () => {
+    await Department.create({ name: 'Cardiology' });
+    const admin = await createUser('Ad Min', 'admin');
+
+    const res = await request(app)
+      .post('/api/admin/departments')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ name: 'Cardiology' });
+
+    expect(res.status).toBe(409);
+  });
+
+  test('rejects a non-admin caller (failure case)', async () => {
+    const patient = await createUser('Pat Ient', 'patient');
+
+    const res = await request(app)
+      .post('/api/admin/departments')
+      .set('Authorization', `Bearer ${tokenFor(patient)}`)
+      .send({ name: 'Neurology' });
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('POST /api/admin/specializations', () => {
+  test('creates a new specialization (happy path)', async () => {
+    await Specialization.create({ name: 'Cardiology' });
+    const admin = await createUser('Ad Min', 'admin');
+
+    const res = await request(app)
+      .post('/api/admin/specializations')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ name: 'Neurology' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.specialization.name).toBe('Neurology');
+
+    const all = await Specialization.find().sort({ name: 1 });
+    expect(all.map((s) => s.name)).toEqual(['Cardiology', 'Neurology']);
+  });
+
+  test('rejects a duplicate specialization name (failure case)', async () => {
+    await Specialization.create({ name: 'Cardiology' });
+    const admin = await createUser('Ad Min', 'admin');
+
+    const res = await request(app)
+      .post('/api/admin/specializations')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ name: 'Cardiology' });
+
+    expect(res.status).toBe(409);
+  });
+
+  test('rejects a non-admin caller (failure case)', async () => {
+    const patient = await createUser('Pat Ient', 'patient');
+
+    const res = await request(app)
+      .post('/api/admin/specializations')
+      .set('Authorization', `Bearer ${tokenFor(patient)}`)
+      .send({ name: 'Neurology' });
+
+    expect(res.status).toBe(403);
   });
 });

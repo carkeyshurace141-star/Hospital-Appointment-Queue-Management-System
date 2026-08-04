@@ -9,6 +9,7 @@
     "start": "node server.js",
     "seed:admin": "node scripts/createAdmin.js",
     "seed:departments": "node scripts/seedDepartments.js",
+    "seed:specializations": "node scripts/seedSpecializations.js",
     "seed:demo": "node scripts/seedDemoData.js",
     "seed:live-queue": "node scripts/seedLiveQueue.js",
     "add:admin": "node scripts/addAdminInteractive.js",
@@ -32,6 +33,7 @@
     "jsonwebtoken": "^9.0.2",
     "libphonenumber-js": "^1.13.9",
     "mongoose": "^8.6.0",
+    "nodemailer": "^9.0.4",
     "socket.io": "^4.7.5"
   },
   "devDependencies": {

@@ -119,7 +119,7 @@ describe('MultiLevelQueueScheduler', () => {
     });
 
     // Even once the walk-in patient's wait exceeds the aging threshold,
-    // emergency patients are never preempted — aging only reorders among
+    // emergency patients are never preempted - aging only reorders among
     // the non-emergency tiers.
     const later = scheduler.serveNext(start + 16 * 60 * 1000);
     expect(later.patient.category).toBe('emergency');

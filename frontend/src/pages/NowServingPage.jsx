@@ -4,7 +4,7 @@ import { io } from 'socket.io-client';
 import { API_URL } from '../services/api';
 import { listDepartments } from '../services/departmentService';
 
-// Short native beep via the Web Audio API — no external audio file or
+// Short native beep via the Web Audio API - no external audio file or
 // library needed, and it never plays until a call actually happens.
 function playBeep() {
   try {
@@ -93,7 +93,7 @@ function NowServingPage() {
           pulse ? 'scale-110 text-teal-400' : 'text-white'
         }`}
       >
-        {now ? now.tokenNumber : '—'}
+        {now ? now.tokenNumber : '-'}
       </p>
       <p className="mt-6 text-xl text-stone-400">
         {now ? 'Please proceed to the consultation room' : 'Waiting for the next call'}

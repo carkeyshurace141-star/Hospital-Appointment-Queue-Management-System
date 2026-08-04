@@ -8,4 +8,8 @@ function listDoctorsForDepartment(departmentId) {
   return request(`/api/departments/${departmentId}/doctors`);
 }
 
-export { listDepartments, listDoctorsForDepartment };
+function getQueueSummary(departmentId) {
+  return request(`/api/departments/${departmentId}/queue-summary`);
+}
+
+export { listDepartments, listDoctorsForDepartment, getQueueSummary };

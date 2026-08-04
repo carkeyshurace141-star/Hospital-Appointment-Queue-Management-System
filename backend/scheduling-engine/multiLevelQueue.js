@@ -1,7 +1,7 @@
 const RoundRobinQueue = require('./roundRobin');
 
 // A patient waiting longer than this in a lower-priority internal queue is
-// promoted to be served next, regardless of strict queue order — this is
+// promoted to be served next, regardless of strict queue order - this is
 // what guarantees a Regular patient is eventually served even under a
 // constant stream of Emergency arrivals.
 const DEFAULT_AGING_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
@@ -62,7 +62,7 @@ class MultiLevelQueueScheduler {
   }
 
   // Serves the next patient. Emergency always drains first and can never be
-  // preempted by aging — aging only decides ordering among the non-emergency
+  // preempted by aging - aging only decides ordering among the non-emergency
   // tiers. Once emergency is empty, aged patients (waited past the
   // threshold) are promoted ahead of everything else; otherwise
   // elderly/disabled drains next, then booked and walk-in alternate fairly.

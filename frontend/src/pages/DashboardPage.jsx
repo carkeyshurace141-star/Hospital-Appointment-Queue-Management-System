@@ -1,9 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { listMine } from '../services/appointmentService';
+import FormField from '../components/FormField.jsx';
+import { listMine, cancelAppointment, rescheduleAppointment } from '../services/appointmentService';
+import { categoryLabel } from '../utils/categories';
 
 const ACTIVE_STATUSES = ['booked', 'checked-in', 'in-queue', 'in-consultation'];
+
+const STATUS_LABELS = {
+  booked: 'Booked',
+  'checked-in': 'Checked In',
+  'in-queue': 'In Queue',
+  'in-consultation': 'Being Seen',
+  completed: 'Completed',
+  'no-show': 'No Show',
+  cancelled: 'Cancelled',
+};
 
 const CHECK_ICON = (
   <>
@@ -143,93 +155,335 @@ function JourneyFlow({ currentIndex }) {
   );
 }
 
+function statusBadgeClasses(status) {
+  if (status === 'completed') {
+    return 'bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-300';
+  }
+  if (status === 'cancelled' || status === 'no-show') {
+    return 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300';
+  }
+  return 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300';
+}
+
+// datetime-local inputs need "YYYY-MM-DDTHH:mm" in *local* time, not the
+// UTC ISO string the API returns.
+function toDateTimeLocal(isoString) {
+  const date = new Date(isoString);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
+}
+
+function AppointmentCard({ appointment, token, onChanged }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [timeSlotValue, setTimeSlotValue] = useState('');
+  const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  function startEditing() {
+    setTimeSlotValue(toDateTimeLocal(appointment.timeSlot));
+    setError('');
+    setIsEditing(true);
+  }
+
+  async function handleReschedule(event) {
+    event.preventDefault();
+    if (!timeSlotValue) {
+      setError('Please choose a date and time.');
+      return;
+    }
+    if (new Date(timeSlotValue).getTime() <= Date.now()) {
+      setError('Time slot must be in the future.');
+      return;
+    }
+
+    setIsSaving(true);
+    setError('');
+    try {
+      await rescheduleAppointment(
+        appointment.id,
+        { timeSlot: new Date(timeSlotValue).toISOString() },
+        token,
+      );
+      setIsEditing(false);
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleCancel() {
+    if (!window.confirm('Cancel this appointment?')) return;
+    setIsCancelling(true);
+    setError('');
+    try {
+      await cancelAppointment(appointment.id, token);
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+      setIsCancelling(false);
+    }
+  }
+
+  // Mirrors the backend: only a not-yet-seen appointment can be rescheduled,
+  // but it can be cancelled any time up to being called in (see
+  // CANCELLABLE_STATUSES in appointmentController.js).
+  const canReschedule = appointment.status === 'booked';
+  const canCancel = ['booked', 'checked-in', 'in-queue'].includes(appointment.status);
+
+  return (
+    <li className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="font-medium text-stone-900 dark:text-white">
+            {appointment.department?.name || 'Department'}
+          </p>
+          <p className="text-sm text-stone-600 dark:text-stone-400">
+            {appointment.doctor?.name
+              ? `Dr. ${appointment.doctor.name}${
+                  appointment.doctor.specialization ? ` - ${appointment.doctor.specialization}` : ''
+                }`
+              : 'Doctor to be assigned'}
+          </p>
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+            {appointment.timeSlot ? new Date(appointment.timeSlot).toLocaleString() : 'Walk-in'}
+            {' · '}
+            {categoryLabel(appointment.category)}
+          </p>
+        </div>
+        <span
+          className={`rounded-md px-2 py-1 text-xs font-semibold ${statusBadgeClasses(
+            appointment.status,
+          )}`}
+        >
+          {STATUS_LABELS[appointment.status] || appointment.status}
+        </span>
+      </div>
+
+      {error ? (
+        <p role="alert" aria-live="assertive" className="mt-2 text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      ) : null}
+
+      {isEditing ? (
+        <form onSubmit={handleReschedule} className="mt-4 flex flex-wrap items-end gap-3">
+          <div className="min-w-[220px] flex-1">
+            <FormField
+              id={`reschedule-${appointment.id}`}
+              label="New date and time"
+              type="datetime-local"
+              value={timeSlotValue}
+              onChange={(event) => setTimeSlotValue(event.target.value)}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSaving ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsEditing(false)}
+            className="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800"
+          >
+            Cancel
+          </button>
+        </form>
+      ) : canReschedule || canCancel ? (
+        <div className="mt-4 flex gap-4 text-sm">
+          {canReschedule ? (
+            <button
+              type="button"
+              onClick={startEditing}
+              className="font-medium text-teal-700 hover:underline dark:text-teal-400"
+            >
+              Reschedule
+            </button>
+          ) : null}
+          {canCancel ? (
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={isCancelling}
+              className="font-medium text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400"
+            >
+              {isCancelling ? 'Cancelling…' : 'Cancel appointment'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+const COLLAPSED_APPOINTMENT_COUNT = 2;
+
+function MyAppointments({ appointments, token, onChanged }) {
+  const [showAll, setShowAll] = useState(false);
+
+  if (appointments.length === 0) {
+    return (
+      <p className="text-sm text-stone-500 dark:text-stone-400">
+        You haven&apos;t made any appointments yet.
+      </p>
+    );
+  }
+
+  const visibleAppointments = showAll
+    ? appointments
+    : appointments.slice(0, COLLAPSED_APPOINTMENT_COUNT);
+  const hiddenCount = appointments.length - visibleAppointments.length;
+
+  return (
+    <>
+      <ul className="space-y-3">
+        {visibleAppointments.map((appointment) => (
+          <AppointmentCard
+            key={appointment.id}
+            appointment={appointment}
+            token={token}
+            onChanged={onChanged}
+          />
+        ))}
+      </ul>
+      {appointments.length > COLLAPSED_APPOINTMENT_COUNT ? (
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setShowAll((prev) => !prev)}
+            className="text-sm font-medium text-teal-700 hover:underline dark:text-teal-400"
+          >
+            {showAll ? 'Show less' : `Show more (${hiddenCount})`}
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function DashboardPage() {
   const { user, token } = useAuth();
-  const [activeAppointment, setActiveAppointment] = useState(null);
+  const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const refetch = useCallback(
+    () =>
+      listMine(token)
+        .then((data) => setAppointments(data.appointments))
+        .catch(() => setAppointments([])),
+    [token],
+  );
+
   useEffect(() => {
-    listMine(token)
-      .then((data) => {
-        const active = data.appointments.find((a) => ACTIVE_STATUSES.includes(a.status));
-        setActiveAppointment(active || null);
-      })
-      .catch(() => setActiveAppointment(null))
-      .finally(() => setIsLoading(false));
-  }, [token]);
+    setIsLoading(true);
+    refetch().finally(() => setIsLoading(false));
+  }, [refetch]);
+
+  const activeAppointment = useMemo(
+    () => appointments.find((a) => ACTIVE_STATUSES.includes(a.status)) || null,
+    [appointments],
+  );
 
   const currentIndex = activeAppointment
     ? FLOW_STEPS.findIndex((step) => step.key === activeAppointment.status)
     : -1;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
       <h1 className="text-2xl font-bold text-stone-900 dark:text-white">Welcome, {user?.name}</h1>
       <p className="mt-1 text-stone-600 dark:text-stone-400">
         Book an appointment, register as a walk-in, or check in below.
       </p>
 
-      <section className="mt-6 rounded-lg border border-stone-200 bg-white p-6 dark:border-stone-800 dark:bg-stone-950">
-        {isLoading ? (
-          <p className="text-sm text-stone-500 dark:text-stone-400">Loading your status…</p>
-        ) : activeAppointment ? (
-          <>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                Your journey — {activeAppointment.department?.name}
-              </h2>
-              {activeAppointment.status === 'booked' ? (
-                <Link
-                  to="/check-in"
-                  className="text-sm font-medium text-teal-700 hover:underline dark:text-teal-400"
-                >
-                  Check in now
-                </Link>
-              ) : ['in-queue', 'in-consultation'].includes(activeAppointment.status) ? (
-                <Link
-                  to="/queue-status"
-                  className="text-sm font-medium text-teal-700 hover:underline dark:text-teal-400"
-                >
-                  View live status
-                </Link>
-              ) : null}
-            </div>
-            <div className="mt-4">
-              <JourneyFlow currentIndex={currentIndex} />
-            </div>
-          </>
-        ) : (
-          <div className="text-center">
-            <p className="text-stone-700 dark:text-stone-300">
-              You don&apos;t have an active appointment right now.
-            </p>
-            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-              Book ahead or walk in below to get started.
-            </p>
-          </div>
-        )}
-      </section>
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <section className="rounded-lg border border-stone-200 bg-white p-6 dark:border-stone-800 dark:bg-stone-950">
+            {isLoading ? (
+              <p className="text-sm text-stone-500 dark:text-stone-400">Loading your status…</p>
+            ) : activeAppointment ? (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                    Your journey - {activeAppointment.department?.name}
+                  </h2>
+                  {activeAppointment.status === 'booked' ? (
+                    <Link
+                      to="/check-in"
+                      className="text-sm font-medium text-teal-700 hover:underline dark:text-teal-400"
+                    >
+                      Check in now
+                    </Link>
+                  ) : ['in-queue', 'in-consultation'].includes(activeAppointment.status) ? (
+                    <Link
+                      to="/queue-status"
+                      className="text-sm font-medium text-teal-700 hover:underline dark:text-teal-400"
+                    >
+                      View live status
+                    </Link>
+                  ) : null}
+                </div>
+                <div className="mt-4">
+                  <JourneyFlow currentIndex={currentIndex} />
+                </div>
+              </>
+            ) : (
+              <div className="text-center">
+                <p className="text-stone-700 dark:text-stone-300">
+                  You don&apos;t have an active appointment right now.
+                </p>
+                <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+                  Book ahead or walk in below to get started.
+                </p>
+              </div>
+            )}
+          </section>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        {ACTIONS.map((action) => (
-          <Link
-            key={action.to}
-            to={action.to}
-            className="flex items-start gap-4 rounded-lg border border-stone-200 bg-white p-4 transition-colors hover:border-teal-500 hover:bg-teal-50 dark:border-stone-800 dark:bg-stone-950 dark:hover:border-teal-500 dark:hover:bg-teal-950"
-          >
-            <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-400">
-              <Icon>{action.icon}</Icon>
-            </span>
-            <span>
-              <span className="block font-medium text-stone-900 dark:text-white">
-                {action.title}
-              </span>
-              <span className="mt-1 block text-sm text-stone-600 dark:text-stone-400">
-                {action.description}
-              </span>
-            </span>
-          </Link>
-        ))}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {ACTIONS.map((action) => (
+              <Link
+                key={action.to}
+                to={action.to}
+                className="flex items-start gap-4 rounded-lg border border-stone-200 bg-white p-4 transition-colors hover:border-teal-500 hover:bg-teal-50 dark:border-stone-800 dark:bg-stone-950 dark:hover:border-teal-500 dark:hover:bg-teal-950"
+              >
+                <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-400">
+                  <Icon>{action.icon}</Icon>
+                </span>
+                <span>
+                  <span className="block font-medium text-stone-900 dark:text-white">
+                    {action.title}
+                  </span>
+                  <span className="mt-1 block text-sm text-stone-600 dark:text-stone-400">
+                    {action.description}
+                  </span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <aside className="lg:col-span-1">
+          <section className="rounded-lg border border-stone-200 bg-white p-6 dark:border-stone-800 dark:bg-stone-950">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+              My appointments
+            </h2>
+            <div className="mt-4">
+              {isLoading ? (
+                <p className="text-sm text-stone-500 dark:text-stone-400">
+                  Loading your appointments…
+                </p>
+              ) : (
+                <MyAppointments appointments={appointments} token={token} onChanged={refetch} />
+              )}
+            </div>
+          </section>
+        </aside>
       </div>
     </div>
   );

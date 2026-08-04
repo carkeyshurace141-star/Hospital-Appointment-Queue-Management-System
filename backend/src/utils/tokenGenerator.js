@@ -13,7 +13,7 @@ function endOfDay(date) {
 }
 
 // Returns the next token number for a department, unique per calendar day.
-// Counts today's existing tokens for the department and increments —
+// Counts today's existing tokens for the department and increments -
 // deliberately not a random id, so patients can be called out in order.
 async function generateToken(departmentId, date = new Date()) {
   const count = await Token.countDocuments({

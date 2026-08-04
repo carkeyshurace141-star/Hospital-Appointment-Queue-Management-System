@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import FormField from '../../components/FormField.jsx';
+import SelectWithAdd from '../../components/SelectWithAdd.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { addDoctor } from '../../services/adminService';
+import { addDoctor, createDepartment, createSpecialization } from '../../services/adminService';
+import { listDepartments } from '../../services/departmentService';
+import { listSpecializations } from '../../services/specializationService';
 import {
   validateName,
   validateEmail,
@@ -30,7 +33,18 @@ function AddDoctorPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [departments, setDepartments] = useState([]);
+  const [specializations, setSpecializations] = useState([]);
   const { token } = useAuth();
+
+  useEffect(() => {
+    listDepartments()
+      .then((data) => setDepartments(data.departments))
+      .catch(() => setDepartments([]));
+    listSpecializations()
+      .then((data) => setSpecializations(data.specializations))
+      .catch(() => setSpecializations([]));
+  }, []);
 
   const errors = validateAll(values);
   const isValid = Object.values(errors).every((e) => !e);
@@ -60,6 +74,22 @@ function AddDoctorPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleAddDepartment(name) {
+    const data = await createDepartment({ name }, token);
+    setDepartments((prev) =>
+      [...prev, data.department].sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    return { value: data.department.name, label: data.department.name };
+  }
+
+  async function handleAddSpecialization(name) {
+    const data = await createSpecialization({ name }, token);
+    setSpecializations((prev) =>
+      [...prev, data.specialization].sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    return { value: data.specialization.name, label: data.specialization.name };
   }
 
   async function handleCopy() {
@@ -157,21 +187,29 @@ function AddDoctorPage() {
             autoComplete="tel"
             error={touched.phone ? errors.phone : ''}
           />
-          <FormField
+          <SelectWithAdd
             id="specialization"
             label="Specialization"
+            placeholder="Select a specialization"
             value={values.specialization}
             onChange={handleChange}
             onBlur={handleBlur}
             error={touched.specialization ? errors.specialization : ''}
+            options={specializations.map((s) => ({ value: s.name, label: s.name }))}
+            addLabel="New specialization name"
+            onAdd={handleAddSpecialization}
           />
-          <FormField
+          <SelectWithAdd
             id="department"
             label="Department"
+            placeholder="Select a department"
             value={values.department}
             onChange={handleChange}
             onBlur={handleBlur}
             error={touched.department ? errors.department : ''}
+            options={departments.map((d) => ({ value: d.name, label: d.name }))}
+            addLabel="New department name"
+            onAdd={handleAddDepartment}
           />
 
           {serverError ? (
