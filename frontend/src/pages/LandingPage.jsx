@@ -1,5 +1,9 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext.jsx';
+import { API_URL } from '../services/api';
+import { listDepartments, getQueueSummary } from '../services/departmentService';
 
 const HIGHLIGHTS = [
   {
@@ -31,13 +35,6 @@ const HIGHLIGHTS = [
   },
 ];
 
-const QUEUE_PREVIEW = [
-  { label: 'Called', sub: 'Room 2', status: 'done' },
-  { label: 'In progress', sub: 'Room 4', status: 'done' },
-  { label: 'You', sub: 'General outpatient', status: 'current' },
-  { label: 'Waiting', sub: '', status: 'pending' },
-];
-
 function Icon({ children, className = 'h-5 w-5' }) {
   return (
     <svg
@@ -46,44 +43,111 @@ function Icon({ children, className = 'h-5 w-5' }) {
       stroke="currentColor"
       strokeWidth="1.75"
       className={className}
+      aria-hidden="true"
     >
       {children}
     </svg>
   );
 }
 
+// Finds the department this preview should track. Falls back to whichever
+// department sorts first if none is named "General" - the seed data or a
+// clinic's own setup may not use that exact name.
+function pickPreviewDepartment(departments) {
+  if (departments.length === 0) return null;
+  return departments.find((d) => /general/i.test(d.name)) || departments[0];
+}
+
 function QueuePreviewCard() {
+  const [department, setDepartment] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listDepartments()
+      .then((data) => {
+        if (cancelled) return;
+        const match = pickPreviewDepartment(data.departments || []);
+        if (!match) {
+          setError(true);
+          return;
+        }
+        setDepartment(match);
+      })
+      .catch(() => !cancelled && setError(true));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!department) return undefined;
+    let cancelled = false;
+
+    getQueueSummary(department.id)
+      .then((data) => !cancelled && setSummary(data))
+      .catch(() => !cancelled && setError(true));
+
+    const socket = io(API_URL);
+    function refresh(payload) {
+      if (payload.departmentId !== department.id) return;
+      getQueueSummary(department.id)
+        .then((data) => !cancelled && setSummary(data))
+        .catch(() => {});
+    }
+    socket.on('queue:updated', refresh);
+    socket.on('appointment:called', refresh);
+    socket.on('appointment:completed', refresh);
+
+    return () => {
+      cancelled = true;
+      socket.disconnect();
+    };
+  }, [department]);
+
+  const departmentName = department?.name || 'General Outpatient';
+  const nowServing = summary?.currentTokenNumber;
+  const waitingCount = summary?.waitingCount ?? 0;
+  const nextTokens = summary?.nextTokenNumbers || [];
+
   return (
     <div className="w-full max-w-sm rounded-lg border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
       <div className="flex items-center justify-between border-b border-stone-100 pb-3 dark:border-stone-800">
         <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-          General Outpatient
+          {departmentName}
         </span>
-        <span className="rounded-md bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-300">
-          Waiting
+        <span className="flex items-center gap-1.5 rounded-md bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+          <span className="h-1.5 w-1.5 rounded-full bg-teal-500" aria-hidden="true" />
+          Live
         </span>
       </div>
 
       <div className="mt-4 flex items-end gap-2">
-        <span className="text-5xl font-bold text-stone-900 dark:text-white">03</span>
-        <span className="mb-1 text-sm text-stone-500 dark:text-stone-400">your position</span>
+        <span className="text-5xl font-bold text-stone-900 dark:text-white">
+          {nowServing || '-'}
+        </span>
+        <span className="mb-1 text-sm text-stone-500 dark:text-stone-400">now serving</span>
       </div>
 
-      <ul className="mt-5 space-y-2">
-        {QUEUE_PREVIEW.map((row) => (
-          <li
-            key={row.label}
-            className={`flex items-center justify-between rounded-md px-3 py-2 text-sm ${
-              row.status === 'current'
-                ? 'bg-teal-50 font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-300'
-                : 'text-stone-500 dark:text-stone-400'
-            }`}
-          >
-            <span>{row.label}</span>
-            {row.sub ? <span className="text-xs">{row.sub}</span> : null}
+      {error ? (
+        <p className="mt-5 text-sm text-stone-500 dark:text-stone-400">
+          Live queue data is unavailable right now.
+        </p>
+      ) : (
+        <ul className="mt-5 space-y-2">
+          <li className="flex items-center justify-between rounded-md bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+            <span>Waiting</span>
+            <span>{waitingCount}</span>
           </li>
-        ))}
-      </ul>
+          {nextTokens.length > 0 ? (
+            <li className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-stone-500 dark:text-stone-400">
+              <span>Up next</span>
+              <span className="text-xs">{nextTokens.join(', ')}</span>
+            </li>
+          ) : null}
+        </ul>
+      )}
     </div>
   );
 }
