@@ -6,6 +6,7 @@ const initSocket = require('./src/config/socket');
 const { hydrateFromDatabase } = require('./scheduling-engine/schedulerManager');
 const { startAppointmentReminderJob } = require('./src/jobs/appointmentReminderJob');
 const { ensureDefaultSpecializations } = require('./src/utils/seedDefaults');
+const { computeAndCacheBenchmark } = require('./src/utils/benchmarkCache');
 
 const PORT = process.env.PORT || 5000;
 
@@ -18,6 +19,9 @@ async function start() {
 
   const { created } = await ensureDefaultSpecializations();
   console.log(`[seed] created ${created} default specialization(s)`);
+
+  computeAndCacheBenchmark();
+  console.log('[benchmark] algorithm comparison computed and cached');
 
   const app = createApp();
   const httpServer = http.createServer(app);

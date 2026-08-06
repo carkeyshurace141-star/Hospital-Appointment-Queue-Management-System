@@ -52,6 +52,13 @@ const appointmentSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Set when a clinician marks the consultation complete (see
+    // clinicianController.complete). Anchors the 24h post-visit chat window
+    // in utils/chatEligibility.js.
+    completedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { collection: 'appointments', timestamps: { createdAt: true, updatedAt: false } },
 );

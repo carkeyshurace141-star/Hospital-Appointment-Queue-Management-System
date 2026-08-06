@@ -1,14 +1,18 @@
 const express = require('express');
-const { body, query } = require('express-validator');
+const { body, param, query } = require('express-validator');
 const {
   addDoctor,
   listDoctors,
+  deleteDoctor,
   createDepartment,
   createSpecialization,
   getOverview,
+  getCompletedTodayDetails,
+  getQueuesOverview,
   getAuditLog,
   getDoctorWorkloadReport,
   getQueuePerformanceReport,
+  getBenchmarkResults,
 } = require('../controllers/adminController');
 const validate = require('../middleware/validate');
 const { requireAuth, requireRole } = require('../middleware/auth');
@@ -56,6 +60,8 @@ const createSpecializationValidation = [
     .withMessage('Name must be at least 2 characters.'),
 ];
 
+const doctorIdParamValidation = [param('id').isMongoId().withMessage('Invalid doctor id.')];
+
 router.post(
   '/doctors',
   requireAuth,
@@ -65,6 +71,15 @@ router.post(
   addDoctor,
 );
 router.get('/doctors', requireAuth, requireRole('admin'), listDoctors);
+router.delete(
+  '/doctors/:id',
+  requireAuth,
+  requireRole('admin'),
+  doctorIdParamValidation,
+  validate,
+  logAccess('delete_doctor', 'user'),
+  deleteDoctor,
+);
 router.post(
   '/departments',
   requireAuth,
@@ -87,6 +102,20 @@ router.get(
   requireRole('admin'),
   logAccess('view_overview', 'report'),
   getOverview,
+);
+router.get(
+  '/queues',
+  requireAuth,
+  requireRole('admin'),
+  logAccess('view_queues', 'report'),
+  getQueuesOverview,
+);
+router.get(
+  '/completed-today',
+  requireAuth,
+  requireRole('admin'),
+  logAccess('view_completed_today', 'report'),
+  getCompletedTodayDetails,
 );
 router.get('/audit-log', requireAuth, requireRole('admin'), getAuditLog);
 
@@ -113,6 +142,13 @@ router.get(
   validate,
   logAccess('view_queue_performance_report', 'report'),
   getQueuePerformanceReport,
+);
+router.get(
+  '/benchmark-results',
+  requireAuth,
+  requireRole('admin'),
+  logAccess('view_benchmark_results', 'report'),
+  getBenchmarkResults,
 );
 
 module.exports = router;

@@ -4,6 +4,21 @@ const User = require('../src/models/User');
 const Appointment = require('../src/models/Appointment');
 const { assignDoctor } = require('../src/utils/resourceAllocation');
 
+// Doctors are only bookable on days they've set hours for (see
+// isDoctorUnavailableOn), so test doctors default to open every day; tests
+// that pass their own `availability` (e.g. { isUnavailable: true }) get it
+// merged over that default so the weekday grid doesn't also block them.
+const ALL_DAY_HOURS = { start: '00:00', end: '23:59' };
+const FULL_WEEK_AVAILABILITY = {
+  monday: ALL_DAY_HOURS,
+  tuesday: ALL_DAY_HOURS,
+  wednesday: ALL_DAY_HOURS,
+  thursday: ALL_DAY_HOURS,
+  friday: ALL_DAY_HOURS,
+  saturday: ALL_DAY_HOURS,
+  sunday: ALL_DAY_HOURS,
+};
+
 async function createDoctor(name, department, availability) {
   return User.create({
     name,
@@ -13,7 +28,7 @@ async function createDoctor(name, department, availability) {
     role: 'doctor',
     specialization: 'General',
     department,
-    availability,
+    availability: { ...FULL_WEEK_AVAILABILITY, ...availability },
   });
 }
 

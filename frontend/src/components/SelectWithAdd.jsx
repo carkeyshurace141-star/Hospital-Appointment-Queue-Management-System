@@ -41,8 +41,7 @@ function SelectWithAdd({
     setAddError('');
   }
 
-  async function handleAdd(event) {
-    event.preventDefault();
+  async function handleAdd() {
     const trimmed = newValue.trim();
     if (trimmed.length < 2) {
       setAddError('Please enter at least 2 characters.');
@@ -92,7 +91,11 @@ function SelectWithAdd({
       </div>
 
       {isAdding ? (
-        <form onSubmit={handleAdd} className="mt-2 flex items-start gap-2">
+        // A plain <div>, not a nested <form> - this already sits inside the
+        // page's main <form> (see AddDoctorPage.jsx), and HTML forms can't
+        // nest. A nested <form>'s submit bubbles up to the outer one instead
+        // of running handleAdd, which reloads the whole page.
+        <div className="mt-2 flex items-start gap-2">
           <div className="flex-1">
             <label htmlFor={`${id}-new`} className="sr-only">
               {addLabel || `New ${label.toLowerCase()}`}
@@ -102,6 +105,11 @@ function SelectWithAdd({
               type="text"
               value={newValue}
               onChange={(event) => setNewValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                handleAdd();
+              }}
               placeholder={addLabel || `New ${label.toLowerCase()}`}
               aria-invalid={Boolean(addError)}
               className="block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500 dark:border-stone-700 dark:bg-stone-900 dark:text-white"
@@ -113,7 +121,8 @@ function SelectWithAdd({
             ) : null}
           </div>
           <button
-            type="submit"
+            type="button"
+            onClick={handleAdd}
             disabled={isSaving}
             className="rounded-md bg-teal-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -126,7 +135,7 @@ function SelectWithAdd({
           >
             Cancel
           </button>
-        </form>
+        </div>
       ) : null}
     </div>
   );

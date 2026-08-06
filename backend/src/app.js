@@ -9,6 +9,7 @@ const departmentRoutes = require('./routes/departmentRoutes');
 const specializationRoutes = require('./routes/specializationRoutes');
 const appointmentRoutes = require('./routes/appointmentRoutes');
 const clinicianRoutes = require('./routes/clinicianRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 function createApp() {
@@ -31,6 +32,7 @@ function createApp() {
   app.use('/api/specializations', specializationRoutes);
   app.use('/api/appointments', appointmentRoutes);
   app.use('/api/clinician', clinicianRoutes);
+  app.use('/api/chat', chatRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

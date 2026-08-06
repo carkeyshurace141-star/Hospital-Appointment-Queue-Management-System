@@ -3,10 +3,15 @@ const Department = require('../models/Department');
 const User = require('../models/User');
 const Token = require('../models/Token');
 const { asyncHandler } = require('../middleware/errorHandler');
-const { assignDoctor, ensureDoctorSlotAvailable } = require('../utils/resourceAllocation');
+const {
+  assignDoctor,
+  ensureDoctorSlotAvailable,
+  isDoctorUnavailableOn,
+} = require('../utils/resourceAllocation');
 const { generateToken } = require('../utils/tokenGenerator');
 const { broadcastQueueUpdate } = require('../utils/queueBroadcast');
 const { sendAppointmentConfirmationEmail } = require('../utils/appointmentEmail');
+const { isChatOpen, chatClosesAt } = require('../utils/chatEligibility');
 const { getScheduler } = require('../../scheduling-engine/schedulerManager');
 
 // Used as the estimated per-patient consultation length until there is
@@ -37,6 +42,8 @@ function toPublicAppointment(appointment) {
     timeSlot: appointment.timeSlot,
     status: appointment.status,
     createdAt: appointment.createdAt,
+    chatOpen: isChatOpen(appointment),
+    chatClosesAt: chatClosesAt(appointment),
   };
 }
 
@@ -91,9 +98,11 @@ async function averageConsultationMinutesToday(departmentId) {
   return totalMinutes / completedTokens.length;
 }
 
-async function resolveDoctor(department, doctorId) {
+// `date` is the requested timeSlot for booked appointments (so date-specific
+// availability overrides apply) or omitted for walk-ins, which default to now.
+async function resolveDoctor(department, doctorId, date = new Date()) {
   if (!doctorId) {
-    return assignDoctor(department._id);
+    return assignDoctor(department._id, date);
   }
 
   const doctor = await User.findOne({ _id: doctorId, role: 'doctor' });
@@ -107,6 +116,11 @@ async function resolveDoctor(department, doctorId) {
     err.status = 400;
     throw err;
   }
+  if (isDoctorUnavailableOn(doctor, date)) {
+    const err = new Error('No appointment available for this doctor on this particular date.');
+    err.status = 409;
+    throw err;
+  }
   return doctor;
 }
 
@@ -118,7 +132,7 @@ const createAppointment = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Department not found.' });
   }
 
-  const doctor = await resolveDoctor(department, doctorId);
+  const doctor = await resolveDoctor(department, doctorId, timeSlot);
   await ensureDoctorSlotAvailable(doctor._id, timeSlot);
 
   const appointment = await Appointment.create({
@@ -225,6 +239,15 @@ const rescheduleAppointment = asyncHandler(async (req, res) => {
   }
 
   const { timeSlot } = req.body;
+
+  if (appointment.doctor) {
+    const doctor = await User.findById(appointment.doctor);
+    if (doctor && isDoctorUnavailableOn(doctor, timeSlot)) {
+      return res
+        .status(409)
+        .json({ message: 'No appointment available for this doctor on this particular date.' });
+    }
+  }
   await ensureDoctorSlotAvailable(appointment.doctor, timeSlot, appointment._id);
 
   appointment.timeSlot = timeSlot;

@@ -9,9 +9,25 @@ const workingHoursSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// One-off exception for a single calendar date (format 'YYYY-MM-DD'), e.g. a
+// doctor who only works one specific day, or who is off on a date that
+// wouldn't otherwise be blocked by their weekly pattern. Takes precedence
+// over the matching weekday's hours - see isDoctorUnavailableOn.
+const dateOverrideSchema = new mongoose.Schema(
+  {
+    date: { type: String, required: true, trim: true },
+    start: { type: String, trim: true, default: '' },
+    end: { type: String, trim: true, default: '' },
+    isUnavailable: { type: Boolean, default: false },
+  },
+  { _id: false },
+);
+
 // Doctor-only. Kept deliberately simple: a working-hours pair per weekday,
 // plus a single override toggle for "unavailable today/right now" that
-// Smart Resource Allocation checks before assigning new patients.
+// Smart Resource Allocation checks before assigning new patients, plus a
+// list of specific-date exceptions for doctors whose availability doesn't
+// follow a recurring weekly pattern.
 const availabilitySchema = new mongoose.Schema(
   {
     monday: workingHoursSchema,
@@ -22,6 +38,7 @@ const availabilitySchema = new mongoose.Schema(
     saturday: workingHoursSchema,
     sunday: workingHoursSchema,
     isUnavailable: { type: Boolean, default: false },
+    dateOverrides: { type: [dateOverrideSchema], default: [] },
   },
   { _id: false },
 );
@@ -70,6 +87,21 @@ const userSchema = new mongoose.Schema(
     mustChangePassword: {
       type: Boolean,
       default: false,
+    },
+    // Only the hash of the reset token is ever stored (see
+    // utils/password.js hashResetToken) - mirrors why passwordHash isn't a
+    // plaintext password. select: false keeps both out of normal queries
+    // and toPublicUser(); authController.resetPassword requests them
+    // explicitly.
+    resetPasswordTokenHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+      select: false,
     },
     specialization: {
       type: String,

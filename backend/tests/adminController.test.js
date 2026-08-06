@@ -8,6 +8,13 @@ const User = require('../src/models/User');
 const Appointment = require('../src/models/Appointment');
 const Token = require('../src/models/Token');
 const { resetSchedulers } = require('../scheduling-engine/schedulerManager');
+const {
+  computeAndCacheBenchmark,
+  resetBenchmarkCache,
+} = require('../src/utils/benchmarkCache');
+const { sendMail } = require('../src/config/mailer');
+
+jest.mock('../src/config/mailer', () => ({ sendMail: jest.fn() }));
 
 const app = createApp();
 
@@ -17,7 +24,21 @@ function tokenFor(user) {
   });
 }
 
-async function createUser(name, role, department) {
+// Doctors are only bookable on days they've set hours for (see
+// isDoctorUnavailableOn), so test doctors default to open every day unless
+// a test explicitly overrides availability to exercise that behavior.
+const ALL_DAY_HOURS = { start: '00:00', end: '23:59' };
+const FULL_WEEK_AVAILABILITY = {
+  monday: ALL_DAY_HOURS,
+  tuesday: ALL_DAY_HOURS,
+  wednesday: ALL_DAY_HOURS,
+  thursday: ALL_DAY_HOURS,
+  friday: ALL_DAY_HOURS,
+  saturday: ALL_DAY_HOURS,
+  sunday: ALL_DAY_HOURS,
+};
+
+async function createUser(name, role, department, availability) {
   return User.create({
     name,
     email: `${name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
@@ -26,11 +47,92 @@ async function createUser(name, role, department) {
     role,
     specialization: role === 'doctor' ? 'General' : '',
     department: department || '',
+    availability: role === 'doctor' ? availability || FULL_WEEK_AVAILABILITY : undefined,
   });
 }
 
 afterEach(() => {
   resetSchedulers();
+  resetBenchmarkCache();
+  sendMail.mockReset();
+});
+
+describe('POST /api/admin/doctors', () => {
+  test('creates the account and emails the doctor their login credentials (happy path)', async () => {
+    const admin = await createUser('Ad Min', 'admin');
+
+    const res = await request(app)
+      .post('/api/admin/doctors')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({
+        name: 'Dr Heart',
+        email: 'dr.heart@example.com',
+        phone: '+447911123456',
+        specialization: 'Cardiology',
+        department: 'Cardiology',
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.temporaryPassword).toEqual(expect.any(String));
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const emailArgs = sendMail.mock.calls[0][0];
+    expect(emailArgs.to).toBe('dr.heart@example.com');
+    expect(emailArgs.text).toContain(res.body.temporaryPassword);
+    expect(emailArgs.text).toContain('Cardiology');
+  });
+
+  test('still creates the account even if sending the email fails (failure case)', async () => {
+    sendMail.mockRejectedValueOnce(new Error('SMTP down'));
+    const admin = await createUser('Ad Min', 'admin');
+
+    const res = await request(app)
+      .post('/api/admin/doctors')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({
+        name: 'Dr Heart',
+        email: 'dr.heart@example.com',
+        phone: '+447911123456',
+        specialization: 'Cardiology',
+        department: 'Cardiology',
+      });
+
+    expect(res.status).toBe(201);
+  });
+
+  test('rejects a duplicate email (failure case)', async () => {
+    const admin = await createUser('Ad Min', 'admin');
+    await createUser('Dr Heart', 'doctor');
+
+    const res = await request(app)
+      .post('/api/admin/doctors')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({
+        name: 'Dr Heart',
+        email: 'dr.heart@example.com',
+        phone: '+447911123456',
+        specialization: 'Cardiology',
+        department: 'Cardiology',
+      });
+
+    expect(res.status).toBe(409);
+  });
+
+  test('rejects a non-admin caller (failure case)', async () => {
+    const patient = await createUser('Pat Ient', 'patient');
+
+    const res = await request(app)
+      .post('/api/admin/doctors')
+      .set('Authorization', `Bearer ${tokenFor(patient)}`)
+      .send({
+        name: 'Dr Heart',
+        email: 'dr.heart@example.com',
+        phone: '+447911123456',
+        specialization: 'Cardiology',
+        department: 'Cardiology',
+      });
+
+    expect(res.status).toBe(403);
+  });
 });
 
 describe('GET /api/admin/overview', () => {
@@ -75,6 +177,99 @@ describe('GET /api/admin/overview', () => {
 
     const res = await request(app)
       .get('/api/admin/overview')
+      .set('Authorization', `Bearer ${tokenFor(patient)}`);
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('GET /api/admin/completed-today', () => {
+  test('returns per-consultation detail for tokens completed today (happy path)', async () => {
+    const department = await Department.create({ name: 'Cardiology' });
+    const doctor = await createUser('Dr Heart', 'doctor', department.name);
+    const patient = await createUser('Pat Ient', 'patient');
+    const admin = await createUser('Ad Min', 'admin');
+
+    const appointment = await Appointment.create({
+      patient: patient._id,
+      doctor: doctor._id,
+      department: department._id,
+      category: 'regular',
+      type: 'walk-in',
+      status: 'completed',
+    });
+    await Token.create({
+      appointment: appointment._id,
+      department: department._id,
+      tokenNumber: 7,
+      status: 'completed',
+      calledAt: new Date(),
+      completedAt: new Date(),
+    });
+
+    const res = await request(app)
+      .get('/api/admin/completed-today')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.completed).toHaveLength(1);
+    expect(res.body.completed[0]).toMatchObject({
+      tokenNumber: 7,
+      patientName: 'Pat Ient',
+      doctorName: 'Dr Heart',
+      department: 'Cardiology',
+    });
+  });
+
+  test('rejects a non-admin token (failure case)', async () => {
+    const patient = await createUser('Pat Ient', 'patient');
+
+    const res = await request(app)
+      .get('/api/admin/completed-today')
+      .set('Authorization', `Bearer ${tokenFor(patient)}`);
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('GET /api/admin/queues', () => {
+  test('returns per-department live queue detail (happy path)', async () => {
+    const department = await Department.create({ name: 'Cardiology' });
+    const doctor = await createUser('Dr Heart', 'doctor', department.name);
+    const patientA = await createUser('Pat A', 'patient');
+    const patientB = await createUser('Pat B', 'patient');
+    const admin = await createUser('Ad Min', 'admin');
+
+    await request(app)
+      .post('/api/appointments/walk-in')
+      .set('Authorization', `Bearer ${tokenFor(patientA)}`)
+      .send({ department: department._id.toString(), category: 'regular' });
+    await request(app)
+      .post('/api/appointments/walk-in')
+      .set('Authorization', `Bearer ${tokenFor(patientB)}`)
+      .send({ department: department._id.toString(), category: 'regular' });
+
+    await request(app)
+      .post('/api/clinician/queue/call')
+      .set('Authorization', `Bearer ${tokenFor(doctor)}`);
+
+    const res = await request(app)
+      .get('/api/admin/queues')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`);
+
+    expect(res.status).toBe(200);
+    const cardiology = res.body.queues.find((q) => q.department.name === 'Cardiology');
+    expect(cardiology.current).toBeTruthy();
+    expect(cardiology.current.patientName).toBe('Pat A');
+    expect(cardiology.waitingCount).toBe(1);
+    expect(cardiology.waiting[0].patientName).toBe('Pat B');
+  });
+
+  test('rejects a non-admin token (failure case)', async () => {
+    const patient = await createUser('Pat Ient', 'patient');
+
+    const res = await request(app)
+      .get('/api/admin/queues')
       .set('Authorization', `Bearer ${tokenFor(patient)}`);
 
     expect(res.status).toBe(403);
@@ -301,6 +496,106 @@ describe('POST /api/admin/specializations', () => {
       .post('/api/admin/specializations')
       .set('Authorization', `Bearer ${tokenFor(patient)}`)
       .send({ name: 'Neurology' });
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('DELETE /api/admin/doctors/:id', () => {
+  test('deletes a doctor with no active appointments (happy path)', async () => {
+    const department = await Department.create({ name: 'Cardiology' });
+    const doctor = await createUser('Dr Heart', 'doctor', department.name);
+    const admin = await createUser('Ad Min', 'admin');
+
+    const res = await request(app)
+      .delete(`/api/admin/doctors/${doctor._id}`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`);
+
+    expect(res.status).toBe(200);
+    expect(await User.findById(doctor._id)).toBeNull();
+  });
+
+  test('rejects deleting a doctor with active appointments (failure case)', async () => {
+    const department = await Department.create({ name: 'Cardiology' });
+    const doctor = await createUser('Dr Heart', 'doctor', department.name);
+    const patient = await createUser('Pat Ient', 'patient');
+    const admin = await createUser('Ad Min', 'admin');
+    await Appointment.create({
+      patient: patient._id,
+      doctor: doctor._id,
+      department: department._id,
+      category: 'regular',
+      type: 'booked',
+      timeSlot: new Date(Date.now() + 60 * 60 * 1000),
+      status: 'booked',
+    });
+
+    const res = await request(app)
+      .delete(`/api/admin/doctors/${doctor._id}`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`);
+
+    expect(res.status).toBe(409);
+    expect(await User.findById(doctor._id)).not.toBeNull();
+  });
+
+  test('returns 404 for a non-doctor or missing id (failure case)', async () => {
+    const patient = await createUser('Pat Ient', 'patient');
+    const admin = await createUser('Ad Min', 'admin');
+
+    const res = await request(app)
+      .delete(`/api/admin/doctors/${patient._id}`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  test('rejects a non-admin caller (failure case)', async () => {
+    const department = await Department.create({ name: 'Cardiology' });
+    const doctor = await createUser('Dr Heart', 'doctor', department.name);
+    const patient = await createUser('Pat Ient', 'patient');
+
+    const res = await request(app)
+      .delete(`/api/admin/doctors/${doctor._id}`)
+      .set('Authorization', `Bearer ${tokenFor(patient)}`);
+
+    expect(res.status).toBe(403);
+    expect(await User.findById(doctor._id)).not.toBeNull();
+  });
+});
+
+describe('GET /api/admin/benchmark-results', () => {
+  test('serves the cached benchmark computed at startup, without recomputing (happy path)', async () => {
+    const cached = computeAndCacheBenchmark();
+    const admin = await createUser('Ad Min', 'admin');
+
+    const res = await request(app)
+      .get('/api/admin/benchmark-results')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.generatedAt).toBe(cached.generatedAt);
+    expect(Object.keys(res.body.results)).toEqual(['low', 'typical', 'peak']);
+  });
+
+  test('computes it on the spot if the cache is empty (failure/fallback case)', async () => {
+    const admin = await createUser('Ad Min', 'admin');
+
+    const res = await request(app)
+      .get('/api/admin/benchmark-results')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.results.typical['multi-level-queue']).toEqual(
+      expect.objectContaining({ averageWaitingTime: expect.any(Number) }),
+    );
+  });
+
+  test('rejects a non-admin caller (failure case)', async () => {
+    const patient = await createUser('Pat Ient', 'patient');
+
+    const res = await request(app)
+      .get('/api/admin/benchmark-results')
+      .set('Authorization', `Bearer ${tokenFor(patient)}`);
 
     expect(res.status).toBe(403);
   });

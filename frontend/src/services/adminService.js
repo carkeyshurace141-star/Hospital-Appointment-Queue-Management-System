@@ -18,6 +18,10 @@ function listDoctors(token) {
   return request('/api/admin/doctors', { token });
 }
 
+function deleteDoctor(id, token) {
+  return request(`/api/admin/doctors/${id}`, { method: 'DELETE', token });
+}
+
 function createDepartment({ name, description }, token) {
   return request('/api/admin/departments', {
     method: 'POST',
@@ -36,6 +40,14 @@ function createSpecialization({ name }, token) {
 
 function getOverview(token) {
   return request('/api/admin/overview', { token });
+}
+
+function getQueues(token) {
+  return request('/api/admin/queues', { token });
+}
+
+function getCompletedToday(token) {
+  return request('/api/admin/completed-today', { token });
 }
 
 function getAuditLog(params, token) {
@@ -84,9 +96,12 @@ async function downloadReportCsv(path, params, token, filename) {
 export {
   addDoctor,
   listDoctors,
+  deleteDoctor,
   createDepartment,
   createSpecialization,
   getOverview,
+  getQueues,
+  getCompletedToday,
   getAuditLog,
   getDoctorWorkloadReport,
   getQueuePerformanceReport,

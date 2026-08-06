@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import ConfirmDialog from '../../components/ConfirmDialog.jsx';
 import SelectField from '../../components/SelectField.jsx';
+import ChatPanel, { formatClosesAt } from '../../components/ChatPanel.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { API_URL } from '../../services/api';
 import {
@@ -13,8 +14,10 @@ import {
   refer,
   markNoShow,
   updateAvailability,
+  getRecentPatients,
 } from '../../services/clinicianService';
 import { listDepartments } from '../../services/departmentService';
+import { getUnreadCount } from '../../services/chatService';
 import { categoryLabel } from '../../utils/categories';
 
 const DAYS = [
@@ -32,6 +35,31 @@ function minutesWaiting(queuedAt) {
   return Math.max(0, Math.round((Date.now() - queuedAt) / 60000));
 }
 
+// Adds `offset` days to a 'YYYY-MM-DD' string, staying in UTC so it can't
+// drift a day off depending on the doctor's local timezone.
+function addDays(dateKey, offset) {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + offset));
+  return date.toISOString().slice(0, 10);
+}
+
+function MessageButton({ patientName, unreadCount = 0, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative text-sm font-medium text-teal-700 hover:underline dark:text-teal-400"
+    >
+      Message {patientName}
+      {unreadCount > 0 ? (
+        <span className="ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+          {unreadCount}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
 function DoctorDashboardPage() {
   const { user, token } = useAuth();
   const [data, setData] = useState(null);
@@ -47,8 +75,17 @@ function DoctorDashboardPage() {
   const [confirmingNoShow, setConfirmingNoShow] = useState(false);
 
   const [availability, setAvailability] = useState(user?.availability || {});
+  const [dateOverrides, setDateOverrides] = useState(user?.availability?.dateOverrides || []);
+  const [weekStartDate, setWeekStartDate] = useState('');
+  // Monday's date is the one the doctor picks; every other day's date is
+  // derived from it in increasing order, so they always stay in sequence.
+  const weekDates = weekStartDate ? DAYS.map((_, index) => addDays(weekStartDate, index)) : null;
   const [savingAvailability, setSavingAvailability] = useState(false);
   const [availabilitySaved, setAvailabilitySaved] = useState(false);
+
+  const [recentPatients, setRecentPatients] = useState([]);
+  const [unreadByAppointment, setUnreadByAppointment] = useState({});
+  const [chatTarget, setChatTarget] = useState(null);
 
   const refreshQueue = useCallback(async () => {
     try {
@@ -60,9 +97,27 @@ function DoctorDashboardPage() {
     }
   }, [token]);
 
+  const refreshRecentPatients = useCallback(() => {
+    getRecentPatients(token)
+      .then((result) => setRecentPatients(result.patients))
+      .catch(() => setRecentPatients([]));
+  }, [token]);
+
+  const refreshUnread = useCallback(() => {
+    getUnreadCount(token)
+      .then((result) =>
+        setUnreadByAppointment(
+          Object.fromEntries(result.byAppointment.map((row) => [row.appointmentId, row.count])),
+        ),
+      )
+      .catch(() => setUnreadByAppointment({}));
+  }, [token]);
+
   useEffect(() => {
     refreshQueue().finally(() => setIsLoading(false));
-  }, [refreshQueue]);
+    refreshRecentPatients();
+    refreshUnread();
+  }, [refreshQueue, refreshRecentPatients, refreshUnread]);
 
   useEffect(() => {
     if (!data?.department?.id) return undefined;
@@ -143,6 +198,28 @@ function DoctorDashboardPage() {
     }));
   }
 
+  function clearDayAvailability(day) {
+    setAvailabilitySaved(false);
+    setAvailability((prev) => ({ ...prev, [day]: { start: '', end: '' } }));
+  }
+
+  function addDateOverride() {
+    setAvailabilitySaved(false);
+    setDateOverrides((prev) => [...prev, { date: '', start: '', end: '', isUnavailable: false }]);
+  }
+
+  function handleDateOverrideChange(index, field, value) {
+    setAvailabilitySaved(false);
+    setDateOverrides((prev) =>
+      prev.map((entry, i) => (i === index ? { ...entry, [field]: value } : entry)),
+    );
+  }
+
+  function removeDateOverride(index) {
+    setAvailabilitySaved(false);
+    setDateOverrides((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleSaveAvailability(event) {
     event.preventDefault();
     setSavingAvailability(true);
@@ -154,11 +231,38 @@ function DoctorDashboardPage() {
           { start: availability[key]?.start || '', end: availability[key]?.end || '' },
         ]),
       );
+      // Rows the doctor added but never picked a date for are dropped
+      // rather than sent - they're not a valid override yet.
+      const cleanedOverrides = dateOverrides.filter((entry) => entry.date);
+
+      // A chosen week-starting date pins that day's hours to real calendar
+      // dates (Mon = weekStartDate, Tue = +1, ...), one dateOverride per day
+      // that actually has hours set. Blank days are left alone - they're
+      // already unavailable by default with no hours set.
+      const weekOverrides = [];
+      if (weekDates) {
+        DAYS.forEach(([key], index) => {
+          const start = availability[key]?.start || '';
+          const end = availability[key]?.end || '';
+          if (start && end) {
+            weekOverrides.push({ date: weekDates[index], start, end, isUnavailable: false });
+          }
+        });
+      }
+
+      const mergedOverrides = new Map(cleanedOverrides.map((entry) => [entry.date, entry]));
+      weekOverrides.forEach((entry) => mergedOverrides.set(entry.date, entry));
+
       const result = await updateAvailability(
-        { isUnavailable: Boolean(availability.isUnavailable), hours },
+        {
+          isUnavailable: Boolean(availability.isUnavailable),
+          hours,
+          dateOverrides: Array.from(mergedOverrides.values()),
+        },
         token,
       );
       setAvailability(result.availability);
+      setDateOverrides(result.availability.dateOverrides || []);
       setAvailabilitySaved(true);
     } catch (err) {
       setActionError(err.message);
@@ -221,6 +325,20 @@ function DoctorDashboardPage() {
             <p className="mt-1 text-stone-700 dark:text-stone-300">
               {current.patientName} · {categoryLabel(current.category)}
             </p>
+            <div className="mt-2">
+              <MessageButton
+                patientName={current.patientName}
+                unreadCount={unreadByAppointment[current.appointmentId] || 0}
+                onClick={() =>
+                  setChatTarget({
+                    appointmentId: current.appointmentId,
+                    title: current.patientName,
+                    chatOpen: true,
+                    chatClosesAt: null,
+                  })
+                }
+              />
+            </div>
 
             {referOpen ? (
               <div className="mt-4 rounded-md border border-stone-200 p-4 dark:border-stone-800">
@@ -325,18 +443,72 @@ function DoctorDashboardPage() {
           {queue.map((patient) => (
             <li
               key={patient.appointmentId}
-              className="flex items-center justify-between rounded-md border border-stone-200 px-4 py-2 text-sm dark:border-stone-800"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-stone-200 px-4 py-2 text-sm dark:border-stone-800"
             >
               <span className="font-medium text-stone-900 dark:text-white">
                 Token {patient.tokenNumber} · {patient.patientName}
               </span>
-              <span className="text-stone-600 dark:text-stone-400">
-                {categoryLabel(patient.category)} · waiting {minutesWaiting(patient.queuedAt)}m
+              <span className="flex items-center gap-3">
+                <span className="text-stone-600 dark:text-stone-400">
+                  {categoryLabel(patient.category)} · waiting {minutesWaiting(patient.queuedAt)}m
+                </span>
+                <MessageButton
+                  patientName={patient.patientName}
+                  unreadCount={unreadByAppointment[patient.appointmentId] || 0}
+                  onClick={() =>
+                    setChatTarget({
+                      appointmentId: patient.appointmentId,
+                      title: patient.patientName,
+                      chatOpen: true,
+                      chatClosesAt: null,
+                    })
+                  }
+                />
               </span>
             </li>
           ))}
         </ul>
       </section>
+
+      {recentPatients.length > 0 ? (
+        <section className="mt-6 rounded-lg border border-stone-200 bg-white p-6 dark:border-stone-800 dark:bg-stone-950">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-white">
+            Recent patients
+          </h2>
+          <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
+            Follow-up messaging stays open for 24 hours after a completed visit.
+          </p>
+          <ul className="mt-4 space-y-2">
+            {recentPatients.map((patient) => (
+              <li
+                key={patient.appointmentId}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-stone-200 px-4 py-2 text-sm dark:border-stone-800"
+              >
+                <span className="font-medium text-stone-900 dark:text-white">
+                  {patient.patientName}
+                </span>
+                <span className="flex items-center gap-3">
+                  <span className="text-stone-600 dark:text-stone-400">
+                    {formatClosesAt(patient.chatClosesAt)}
+                  </span>
+                  <MessageButton
+                    patientName={patient.patientName}
+                    unreadCount={unreadByAppointment[patient.appointmentId] || 0}
+                    onClick={() =>
+                      setChatTarget({
+                        appointmentId: patient.appointmentId,
+                        title: patient.patientName,
+                        chatOpen: patient.chatOpen,
+                        chatClosesAt: patient.chatClosesAt,
+                      })
+                    }
+                  />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="mt-6 rounded-lg border border-stone-200 bg-white p-6 dark:border-stone-800 dark:bg-stone-950">
         <h2 className="text-lg font-semibold text-stone-900 dark:text-white">Availability</h2>
@@ -354,10 +526,38 @@ function DoctorDashboardPage() {
             Mark myself unavailable (I will be skipped for new patient assignment)
           </label>
 
+          <div>
+            <label
+              htmlFor="week-start-date"
+              className="text-sm font-medium text-stone-700 dark:text-stone-300"
+            >
+              Week starting
+            </label>
+            <input
+              id="week-start-date"
+              type="date"
+              value={weekStartDate}
+              onChange={(e) => {
+                setAvailabilitySaved(false);
+                setWeekStartDate(e.target.value);
+              }}
+              className="ml-3 rounded-md border border-stone-300 px-2 py-1 text-sm dark:border-stone-700 dark:bg-stone-900 dark:text-white"
+            />
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              Optional: pick Monday&apos;s date and each day below gets the matching date for
+              that week, in order. Saving pins that week&apos;s hours to those exact dates.
+            </p>
+          </div>
+
           <div className="space-y-2">
-            {DAYS.map(([key, label]) => (
+            {DAYS.map(([key, label], index) => (
               <div key={key} className="flex items-center gap-3 text-sm">
                 <span className="w-24 text-stone-700 dark:text-stone-300">{label}</span>
+                {weekDates ? (
+                  <span className="w-28 text-xs text-stone-500 dark:text-stone-400">
+                    {weekDates[index]}
+                  </span>
+                ) : null}
                 <label className="sr-only" htmlFor={`${key}-start`}>
                   {label} start time
                 </label>
@@ -379,8 +579,93 @@ function DoctorDashboardPage() {
                   onChange={(e) => handleDayChange(key, 'end', e.target.value)}
                   className="rounded-md border border-stone-300 px-2 py-1 dark:border-stone-700 dark:bg-stone-900 dark:text-white"
                 />
+                <button
+                  type="button"
+                  onClick={() => clearDayAvailability(key)}
+                  disabled={!availability[key]?.start && !availability[key]?.end}
+                  className="text-sm font-medium text-red-700 hover:underline disabled:cursor-not-allowed disabled:text-stone-400 disabled:no-underline dark:text-red-400 dark:disabled:text-stone-600"
+                >
+                  Remove
+                </button>
               </div>
             ))}
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-stone-900 dark:text-white">
+              Specific dates
+            </h3>
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              For a schedule that doesn&apos;t repeat every week - add just the dates you&apos;re
+              available (or mark a single date unavailable). A date here overrides that
+              weekday&apos;s hours above.
+            </p>
+
+            <div className="mt-3 space-y-2">
+              {dateOverrides.map((entry, index) => (
+                <div key={index} className="flex flex-wrap items-center gap-3 text-sm">
+                  <label className="sr-only" htmlFor={`date-override-${index}`}>
+                    Date
+                  </label>
+                  <input
+                    id={`date-override-${index}`}
+                    type="date"
+                    value={entry.date}
+                    onChange={(e) => handleDateOverrideChange(index, 'date', e.target.value)}
+                    className="rounded-md border border-stone-300 px-2 py-1 dark:border-stone-700 dark:bg-stone-900 dark:text-white"
+                  />
+                  <label className="sr-only" htmlFor={`date-override-${index}-start`}>
+                    Start time
+                  </label>
+                  <input
+                    id={`date-override-${index}-start`}
+                    type="time"
+                    value={entry.start}
+                    disabled={entry.isUnavailable}
+                    onChange={(e) => handleDateOverrideChange(index, 'start', e.target.value)}
+                    className="rounded-md border border-stone-300 px-2 py-1 disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-white"
+                  />
+                  <span className="text-stone-400">to</span>
+                  <label className="sr-only" htmlFor={`date-override-${index}-end`}>
+                    End time
+                  </label>
+                  <input
+                    id={`date-override-${index}-end`}
+                    type="time"
+                    value={entry.end}
+                    disabled={entry.isUnavailable}
+                    onChange={(e) => handleDateOverrideChange(index, 'end', e.target.value)}
+                    className="rounded-md border border-stone-300 px-2 py-1 disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-white"
+                  />
+                  <label className="flex items-center gap-1.5 text-stone-700 dark:text-stone-300">
+                    <input
+                      type="checkbox"
+                      checked={entry.isUnavailable}
+                      onChange={(e) =>
+                        handleDateOverrideChange(index, 'isUnavailable', e.target.checked)
+                      }
+                      className="h-4 w-4 rounded border-stone-300 text-teal-600 focus:ring-teal-500"
+                    />
+                    Unavailable
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => removeDateOverride(index)}
+                    className="text-sm font-medium text-red-700 hover:underline dark:text-red-400"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={addDateOverride}
+              className="mt-3 rounded-md border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100 dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800"
+            >
+              + Add date
+            </button>
           </div>
 
           <button
@@ -424,6 +709,22 @@ function DoctorDashboardPage() {
           isConfirming={actionLoading === 'refer'}
           onConfirm={confirmRefer}
           onCancel={() => setConfirmingRefer(false)}
+        />
+      ) : null}
+
+      {chatTarget ? (
+        <ChatPanel
+          appointmentId={chatTarget.appointmentId}
+          title={chatTarget.title}
+          token={token}
+          currentUserId={user.id}
+          chatOpen={chatTarget.chatOpen}
+          chatClosesAt={chatTarget.chatClosesAt}
+          onClose={() => {
+            setChatTarget(null);
+            refreshUnread();
+          }}
+          onMessagesRead={refreshUnread}
         />
       ) : null}
     </div>

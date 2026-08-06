@@ -185,12 +185,12 @@ function ReportsPage() {
       <section className="mt-8">
         <h2 className="text-lg font-semibold text-stone-900 dark:text-white">Algorithm comparison</h2>
         <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
-          From the benchmark harness (<code>npm run benchmark</code>), comparing FCFS, Priority,
-          Round Robin, and Multi-Level Queue under identical simulated load.
+          Computed automatically when the server starts, comparing FCFS, Priority, Round Robin,
+          and Multi-Level Queue under identical simulated load.
         </p>
         {benchmarkError ? (
           <p className="mt-3 text-sm text-stone-600 dark:text-stone-400">
-            No benchmark results yet - run <code>npm run benchmark</code> in the backend.
+            Couldn&apos;t load the algorithm comparison: {benchmarkError}
           </p>
         ) : benchmark ? (
           Object.entries(benchmark.results).map(([scenario, perAlgorithm]) => (

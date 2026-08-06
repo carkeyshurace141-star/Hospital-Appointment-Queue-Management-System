@@ -33,4 +33,18 @@ function changePassword({ currentPassword, newPassword }, token) {
   });
 }
 
-export { signup, login, googleLogin, fetchMe, changePassword };
+function forgotPassword({ email }) {
+  return request('/api/auth/forgot-password', {
+    method: 'POST',
+    body: { email },
+  });
+}
+
+function resetPassword({ token, newPassword }) {
+  return request('/api/auth/reset-password', {
+    method: 'POST',
+    body: { token, newPassword },
+  });
+}
+
+export { signup, login, googleLogin, fetchMe, changePassword, forgotPassword, resetPassword };

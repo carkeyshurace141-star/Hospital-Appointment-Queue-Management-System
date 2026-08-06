@@ -6,6 +6,7 @@ const { asyncHandler } = require('../middleware/errorHandler');
 const { assignDoctor } = require('../utils/resourceAllocation');
 const { broadcastQueueUpdate } = require('../utils/queueBroadcast');
 const { removeAndPromoteNext } = require('../utils/noShowHandler');
+const { isChatOpen, chatClosesAt, CHAT_WINDOW_MS } = require('../utils/chatEligibility');
 const {
   getScheduler,
   getCurrentServing,
@@ -187,7 +188,7 @@ const complete = asyncHandler(async (req, res) => {
 
   const appointment = await Appointment.findByIdAndUpdate(
     current.id,
-    { status: 'completed' },
+    { status: 'completed', completedAt: new Date() },
     { new: true },
   );
   await Token.findOneAndUpdate(
@@ -289,8 +290,33 @@ const markNoShow = asyncHandler(async (req, res) => {
   });
 });
 
+// Patients whose visit completed within the last 24h - the only window
+// where they're not already surfaced via the live current-patient/waiting
+// views above, but are still reachable for a chat (see chatEligibility.js).
+const recentPatients = asyncHandler(async (req, res) => {
+  const appointments = await Appointment.find({
+    doctor: req.user._id,
+    status: 'completed',
+    completedAt: { $gte: new Date(Date.now() - CHAT_WINDOW_MS) },
+  })
+    .sort({ completedAt: -1 })
+    .populate('patient', 'name');
+
+  res.status(200).json({
+    patients: appointments.map((appointment) => ({
+      appointmentId: appointment._id,
+      patientName: appointment.patient?.name || 'Unknown',
+      completedAt: appointment.completedAt,
+      chatOpen: isChatOpen(appointment),
+      chatClosesAt: chatClosesAt(appointment),
+    })),
+  });
+});
+
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 const updateAvailability = asyncHandler(async (req, res) => {
-  const { isUnavailable, hours } = req.body;
+  const { isUnavailable, hours, dateOverrides } = req.body;
 
   const update = {};
   if (typeof isUnavailable === 'boolean') {
@@ -314,6 +340,26 @@ const updateAvailability = asyncHandler(async (req, res) => {
     }
   }
 
+  // A doctor whose schedule doesn't follow a recurring weekday pattern can
+  // set/unset specific calendar dates instead - a date entry always takes
+  // precedence over that weekday's hours (see isDoctorUnavailableOn), so a
+  // single date is enough even with no weekly hours set at all.
+  if (Array.isArray(dateOverrides)) {
+    const byDate = new Map();
+    for (const entry of dateOverrides) {
+      if (!entry || typeof entry.date !== 'string' || !DATE_KEY_PATTERN.test(entry.date)) {
+        return res.status(400).json({ message: 'Each date override needs a valid YYYY-MM-DD date.' });
+      }
+      byDate.set(entry.date, {
+        date: entry.date,
+        start: typeof entry.start === 'string' ? entry.start : '',
+        end: typeof entry.end === 'string' ? entry.end : '',
+        isUnavailable: Boolean(entry.isUnavailable),
+      });
+    }
+    update['availability.dateOverrides'] = Array.from(byDate.values());
+  }
+
   const doctor = await User.findByIdAndUpdate(req.user._id, { $set: update }, { new: true });
 
   res.status(200).json({ availability: doctor.availability });
@@ -327,5 +373,6 @@ module.exports = {
   complete,
   refer,
   markNoShow,
+  recentPatients,
   updateAvailability,
 };

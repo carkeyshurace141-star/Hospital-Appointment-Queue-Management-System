@@ -8,6 +8,7 @@ const {
   complete,
   refer,
   markNoShow,
+  recentPatients,
   updateAvailability,
 } = require('../controllers/clinicianController');
 const validate = require('../middleware/validate');
@@ -27,15 +28,34 @@ const updateAvailabilityValidation = [
   body('isUnavailable').optional().isBoolean().withMessage('isUnavailable must be true or false.'),
   body('hours').optional().isObject().withMessage('hours must be an object keyed by weekday.'),
   ...DAYS.flatMap((day) => [
+    // checkFalsy: '' (the Remove button's cleared state) counts as "not
+    // provided" and skips the pattern check, instead of failing HH:MM.
     body(`hours.${day}.start`)
-      .optional()
+      .optional({ checkFalsy: true })
       .matches(TIME_PATTERN)
       .withMessage(`${day} start time must be in HH:MM format.`),
     body(`hours.${day}.end`)
-      .optional()
+      .optional({ checkFalsy: true })
       .matches(TIME_PATTERN)
       .withMessage(`${day} end time must be in HH:MM format.`),
   ]),
+  body('dateOverrides').optional().isArray().withMessage('dateOverrides must be an array.'),
+  body('dateOverrides.*.date')
+    .optional()
+    .matches(/^\d{4}-\d{2}-\d{2}$/)
+    .withMessage('Each date override needs a valid YYYY-MM-DD date.'),
+  body('dateOverrides.*.start')
+    .optional({ checkFalsy: true })
+    .matches(TIME_PATTERN)
+    .withMessage('Date override start time must be in HH:MM format.'),
+  body('dateOverrides.*.end')
+    .optional({ checkFalsy: true })
+    .matches(TIME_PATTERN)
+    .withMessage('Date override end time must be in HH:MM format.'),
+  body('dateOverrides.*.isUnavailable')
+    .optional()
+    .isBoolean()
+    .withMessage('isUnavailable must be true or false.'),
 ];
 
 router.get(
@@ -88,6 +108,13 @@ router.post(
   requireRole('doctor'),
   logAccess('mark_no_show', 'appointment'),
   markNoShow,
+);
+router.get(
+  '/recent-patients',
+  requireAuth,
+  requireRole('doctor'),
+  logAccess('view_recent_patients', 'department'),
+  recentPatients,
 );
 router.patch(
   '/availability',

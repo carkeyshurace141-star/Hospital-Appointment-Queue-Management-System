@@ -16,7 +16,21 @@ function tokenFor(user) {
   });
 }
 
-async function createUser(name, role, department) {
+// Doctors are only bookable on days they've set hours for (see
+// isDoctorUnavailableOn), so test doctors default to open every day unless
+// a test explicitly overrides availability to exercise that behavior.
+const ALL_DAY_HOURS = { start: '00:00', end: '23:59' };
+const FULL_WEEK_AVAILABILITY = {
+  monday: ALL_DAY_HOURS,
+  tuesday: ALL_DAY_HOURS,
+  wednesday: ALL_DAY_HOURS,
+  thursday: ALL_DAY_HOURS,
+  friday: ALL_DAY_HOURS,
+  saturday: ALL_DAY_HOURS,
+  sunday: ALL_DAY_HOURS,
+};
+
+async function createUser(name, role, department, availability) {
   return User.create({
     name,
     email: `${name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
@@ -25,6 +39,7 @@ async function createUser(name, role, department) {
     role,
     specialization: role === 'doctor' ? 'General' : '',
     department: department || '',
+    availability: role === 'doctor' ? availability || FULL_WEEK_AVAILABILITY : undefined,
   });
 }
 

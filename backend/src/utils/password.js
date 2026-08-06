@@ -35,4 +35,22 @@ function generateTemporaryPassword(length = 12) {
   return chars.join('');
 }
 
-module.exports = { SALT_ROUNDS, hashPassword, comparePassword, generateTemporaryPassword };
+// The raw token goes in the emailed reset link and is never stored; only
+// its hash is persisted (see User.resetPasswordTokenHash), so a database
+// read alone can never be used to reset someone's password.
+function generateResetToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function hashResetToken(rawToken) {
+  return crypto.createHash('sha256').update(rawToken).digest('hex');
+}
+
+module.exports = {
+  SALT_ROUNDS,
+  hashPassword,
+  comparePassword,
+  generateTemporaryPassword,
+  generateResetToken,
+  hashResetToken,
+};

@@ -36,4 +36,18 @@ function updateAvailability(payload, token) {
   return request('/api/clinician/availability', { method: 'PATCH', body: payload, token });
 }
 
-export { getQueue, callNext, skip, recall, complete, refer, markNoShow, updateAvailability };
+function getRecentPatients(token) {
+  return request('/api/clinician/recent-patients', { token });
+}
+
+export {
+  getQueue,
+  callNext,
+  skip,
+  recall,
+  complete,
+  refer,
+  markNoShow,
+  updateAvailability,
+  getRecentPatients,
+};
