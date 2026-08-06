@@ -11,6 +11,10 @@ function toPublicDepartment(department) {
   };
 }
 
+// Availability is included so the booking flow can warn patients before
+// they submit a date/time the doctor hasn't set hours for - see
+// isDoctorUnavailableOn (backend/src/utils/resourceAllocation.js), which
+// this is meant to mirror on the frontend.
 function toDoctorSummary(user) {
   return {
     id: user._id,
@@ -18,6 +22,7 @@ function toDoctorSummary(user) {
     email: user.email,
     specialization: user.specialization,
     department: user.department,
+    availability: user.availability,
   };
 }
 

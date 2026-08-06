@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import FormField from '../components/FormField.jsx';
+import ChatPanel, { formatClosesAt } from '../components/ChatPanel.jsx';
 import { listMine, cancelAppointment, rescheduleAppointment } from '../services/appointmentService';
+import { getUnreadCount } from '../services/chatService';
 import { categoryLabel } from '../utils/categories';
 
 const ACTIVE_STATUSES = ['booked', 'checked-in', 'in-queue', 'in-consultation'];
@@ -175,7 +177,7 @@ function toDateTimeLocal(isoString) {
   )}:${pad(date.getMinutes())}`;
 }
 
-function AppointmentCard({ appointment, token, onChanged }) {
+function AppointmentCard({ appointment, token, onChanged, unreadCount = 0, onOpenChat }) {
   const [isEditing, setIsEditing] = useState(false);
   const [timeSlotValue, setTimeSlotValue] = useState('');
   const [error, setError] = useState('');
@@ -264,6 +266,28 @@ function AppointmentCard({ appointment, token, onChanged }) {
         </span>
       </div>
 
+      {appointment.chatOpen ? (
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onOpenChat(appointment)}
+            className="relative text-sm font-medium text-teal-700 hover:underline dark:text-teal-400"
+          >
+            Message {appointment.doctor?.name ? `Dr. ${appointment.doctor.name}` : 'doctor'}
+            {unreadCount > 0 ? (
+              <span className="ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+                {unreadCount}
+              </span>
+            ) : null}
+          </button>
+          {appointment.status === 'completed' && appointment.chatClosesAt ? (
+            <span className="text-xs text-stone-500 dark:text-stone-400">
+              ({formatClosesAt(appointment.chatClosesAt)})
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
       {error ? (
         <p role="alert" aria-live="assertive" className="mt-2 text-sm text-red-600 dark:text-red-400">
           {error}
@@ -325,7 +349,7 @@ function AppointmentCard({ appointment, token, onChanged }) {
 
 const COLLAPSED_APPOINTMENT_COUNT = 2;
 
-function MyAppointments({ appointments, token, onChanged }) {
+function MyAppointments({ appointments, token, onChanged, unreadByAppointment, onOpenChat }) {
   const [showAll, setShowAll] = useState(false);
 
   if (appointments.length === 0) {
@@ -350,6 +374,8 @@ function MyAppointments({ appointments, token, onChanged }) {
             appointment={appointment}
             token={token}
             onChanged={onChanged}
+            unreadCount={unreadByAppointment[appointment.id] || 0}
+            onOpenChat={onOpenChat}
           />
         ))}
       </ul>
@@ -372,6 +398,8 @@ function DashboardPage() {
   const { user, token } = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [unreadByAppointment, setUnreadByAppointment] = useState({});
+  const [chatAppointment, setChatAppointment] = useState(null);
 
   const refetch = useCallback(
     () =>
@@ -381,10 +409,23 @@ function DashboardPage() {
     [token],
   );
 
+  const refetchUnread = useCallback(
+    () =>
+      getUnreadCount(token)
+        .then((data) =>
+          setUnreadByAppointment(
+            Object.fromEntries(data.byAppointment.map((row) => [row.appointmentId, row.count])),
+          ),
+        )
+        .catch(() => setUnreadByAppointment({})),
+    [token],
+  );
+
   useEffect(() => {
     setIsLoading(true);
     refetch().finally(() => setIsLoading(false));
-  }, [refetch]);
+    refetchUnread();
+  }, [refetch, refetchUnread]);
 
   const activeAppointment = useMemo(
     () => appointments.find((a) => ACTIVE_STATUSES.includes(a.status)) || null,
@@ -479,12 +520,36 @@ function DashboardPage() {
                   Loading your appointments…
                 </p>
               ) : (
-                <MyAppointments appointments={appointments} token={token} onChanged={refetch} />
+                <MyAppointments
+                  appointments={appointments}
+                  token={token}
+                  onChanged={refetch}
+                  unreadByAppointment={unreadByAppointment}
+                  onOpenChat={setChatAppointment}
+                />
               )}
             </div>
           </section>
         </aside>
       </div>
+
+      {chatAppointment ? (
+        <ChatPanel
+          appointmentId={chatAppointment.id}
+          title={
+            chatAppointment.doctor?.name ? `Dr. ${chatAppointment.doctor.name}` : 'Your doctor'
+          }
+          token={token}
+          currentUserId={user.id}
+          chatOpen={chatAppointment.chatOpen}
+          chatClosesAt={chatAppointment.chatClosesAt}
+          onClose={() => {
+            setChatAppointment(null);
+            refetchUnread();
+          }}
+          onMessagesRead={refetchUnread}
+        />
+      ) : null}
     </div>
   );
 }
